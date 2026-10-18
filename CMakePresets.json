@@ -1,0 +1,7 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {"major": 3, "minor": 28, "patch": 0},
+  "configurePresets": [{"name": "desktop-dev", "displayName": "Deck desktop development", "generator": "Ninja", "binaryDir": "${sourceParentDir}/.deck-local-build/desktop-dev", "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug", "BUILD_TESTING": "ON"}}],
+  "buildPresets": [{"name": "desktop-dev", "configurePreset": "desktop-dev"}],
+  "testPresets": [{"name": "desktop-dev", "configurePreset": "desktop-dev", "output": {"outputOnFailure": true}}]
+}

@@ -1,0 +1,108 @@
+{
+  "repository": "https://github.com/glenzli/shape",
+  "revision": "983022bf35bcfda332ef57aeab81d8015cf5f280",
+  "license": "MIT",
+  "note": "Complete card UI and PDF owners supplied from the pinned source. Deck owns the dedicated shell and deliberate adaptations. Other C++ adapters compile directly from the same Cargo git source.",
+  "files": [
+    {
+      "upstream": "apps/desktop/qml/Theme.qml",
+      "sha256": "f86f0beb089bb1c80714ad742bd91c56476ebc9b8c00b8f2659f71bfa58a3559",
+      "local": "apps/desktop/qml/Theme.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/CardKitWorkspace.qml",
+      "sha256": "0884385c051f48efc2d1f6ec454b976964a3de61c9867d8d0eb219c9f64f1bf6",
+      "local": "apps/desktop/qml/components/CardKitWorkspace.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/CardLayoutOptions.qml",
+      "sha256": "682766f8d8f67b2fbb89519bbf5470409e561eb1e4410bc131e6482888bfba7f",
+      "local": "apps/desktop/qml/components/CardLayoutOptions.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/CardImageIntakeDialog.qml",
+      "sha256": "9df81b81224b083030192efd278039f6949fd9ddb4055e6dae56933a31d1e05c",
+      "local": "apps/desktop/qml/components/CardImageIntakeDialog.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/CardPrintDialog.qml",
+      "sha256": "025bbaf1333d48d8aa3ce7d319bc87df32fd87d70803a916f3548a584e784595",
+      "local": "apps/desktop/qml/components/CardPrintDialog.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/CardListImport.js",
+      "sha256": "ee7de5579372bea0dcda5c14286d61003f110d21c8d8a82365405d6e62e0bc26",
+      "local": "apps/desktop/qml/components/CardListImport.js"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/MaterialEditWorkspace.qml",
+      "sha256": "8214dfc1c32783770bb1fe1ec327bae45afc0b09508985de108647b2046e4c6b",
+      "local": "apps/desktop/qml/components/MaterialEditWorkspace.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/ShapeButton.qml",
+      "sha256": "59141251f4be0f606794f812a7b1ed439649facffe79da59a54dfcca6a7d4ba1",
+      "local": "apps/desktop/qml/components/ShapeButton.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/ShapeTextField.qml",
+      "sha256": "c2fb6a346ae19d7559dd0b57783a07717ea028944796f9af413db4bcae806487",
+      "local": "apps/desktop/qml/components/ShapeTextField.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/ShapeTextArea.qml",
+      "sha256": "a34c733dae846f83239a796a8f6a65d776171e9420f52c98c261d4e62271e439",
+      "local": "apps/desktop/qml/components/ShapeTextArea.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/ShapeTextEditor.qml",
+      "sha256": "92e848b79c85e26902415b14eb926545a97622fa71aa6724bcc7a327dfcdddd3",
+      "local": "apps/desktop/qml/components/ShapeTextEditor.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/ShapeComboBox.qml",
+      "sha256": "478017bb773e900a9eae0428fe4dccb1b07f058172d5566ff68e228d7956345c",
+      "local": "apps/desktop/qml/components/ShapeComboBox.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/ShapeDialog.qml",
+      "sha256": "7443a19ec6db5aa590374b4376ac933fc5d9f96100c047f8ad72851e63e9b3ab",
+      "local": "apps/desktop/qml/components/ShapeDialog.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/ShapeIcon.qml",
+      "sha256": "4d241d11ef87e80cfe85273fdc01a0ab69ed7f03e88d0456651a1505045b6a17",
+      "local": "apps/desktop/qml/components/ShapeIcon.qml"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/ShapeIconButton.qml",
+      "sha256": "e62c2b780ee62494c86be08421f7b22b819b6d36e93a44a09e3f0f219dcb64f5",
+      "local": "apps/desktop/qml/components/ShapeIconButton.qml"
+    },
+    {
+      "upstream": "apps/desktop/src/card_print_export.cpp",
+      "sha256": "60bf7f288942047e92674d64c68acca32a6b497062312b5b4c85a843af82280d",
+      "local": "apps/desktop/src/card_print_export.cpp"
+    },
+    {
+      "upstream": "apps/desktop/src/card_print_export.hpp",
+      "sha256": "3e31f6682cd5d176aff2cb33d085476f03241c01a3d639a2c137d026c7c7af5c",
+      "local": "apps/desktop/src/card_print_export.hpp"
+    },
+    {
+      "upstream": "apps/desktop/src/card_print_controller.cpp",
+      "sha256": "28040e62bc54c72254ad3a42c11cb2608514c22b445006cd6cbc54be5f82b8bd",
+      "local": "apps/desktop/src/card_print_controller.cpp"
+    },
+    {
+      "upstream": "apps/desktop/src/card_print_controller.hpp",
+      "sha256": "6e3b4f20f5ce411f98dc62a9dd1426fb19220d3bea2b87507eb9bf4b29ab676d",
+      "local": "apps/desktop/src/card_print_controller.hpp"
+    },
+    {
+      "upstream": "apps/desktop/qml/components/ImageCompareWorkspace.qml",
+      "sha256": "428a6064c52bd5a5810f775cb67b74d4d500d89e9604fd3b8bf91d71be794366",
+      "local": "apps/desktop/qml/components/ImageCompareWorkspace.qml"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+[workspace]
+members = ["apps/deck-cli"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+shape-core = { git = "https://github.com/glenzli/shape.git", rev = "983022bf35bcfda332ef57aeab81d8015cf5f280" }
+shape-execution = { git = "https://github.com/glenzli/shape.git", rev = "983022bf35bcfda332ef57aeab81d8015cf5f280" }
+shape-domain = { git = "https://github.com/glenzli/shape.git", rev = "983022bf35bcfda332ef57aeab81d8015cf5f280" }
+shape-desktop-bridge = { git = "https://github.com/glenzli/shape.git", rev = "983022bf35bcfda332ef57aeab81d8015cf5f280" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+blake3 = "1.8.5"
+uuid = { version = "1.23.2", features = ["v7"] }
+rustix = { version = "1.1.4", features = ["fs"] }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+must_use_candidate = "allow"
