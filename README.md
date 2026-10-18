@@ -13,20 +13,23 @@ Deck 是制作和打印卡片的桌面工作台。你可以制作识字卡、观
 
 ### 界面预览
 
+截图使用「形与引力」抽象艺术卡组：三张 AI 生成的卡面图片，导入 Deck 后编辑与拼版。
+[下载示例原图并查看提示词](docs/examples/abstract-cards/README.md)。
+
 **制卡工作台 · Card editor**
 
-![浅色中文工作台：卡片列表、实时预览与内容编辑 · Light Chinese card editor](docs/screenshots/workbench-light-zh.png)
+![浅色中文工作台：引力艺术卡与实时版式预览 · Light Chinese art-card editor](docs/screenshots/workbench-light-zh.jpg)
 
 <details>
 <summary>查看更多：版式预设与打印拼版 · More: layout presets and printing</summary>
 
 **版式预设 · Layout presets**
 
-![十二种卡面预设与图文排版 · Twelve card layout presets](docs/screenshots/layout-presets-en.png)
+![共振艺术卡与十二种卡面预设 · Resonance art card and twelve layout presets](docs/screenshots/layout-presets-en.jpg)
 
 **打印拼版 · Print and arrange**
 
-![深色中文打印界面：A4 单卡重复、快捷网格与裁切线 · Dark Chinese A4 print layout](docs/screenshots/print-layout-dark-zh.png)
+![深色中文打印界面：艺术卡 A4 多卡混排、两列三行与裁切线 · Dark Chinese A4 art-card print layout](docs/screenshots/print-layout-dark-zh.jpg)
 
 </details>
 
@@ -136,6 +139,9 @@ how many copies you need, and arrange them on a printable sheet with crop marks.
 The project is under active development. The current macOS build targets macOS 26.
 
 [View screenshots: editor, layout presets and printing](#界面预览).
+
+The pictured **FORM** set uses three AI-generated artworks imported as finished card images.
+[Download the example artwork and view the prompts](docs/examples/abstract-cards/README.md).
 
 ### From a card to a printed sheet
 

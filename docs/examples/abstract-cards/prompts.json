@@ -1,0 +1,19 @@
+{
+  "title": "形与引力 · FORM",
+  "generation": "Built-in image_gen",
+  "images": [
+    {
+      "file": "gravity.png",
+      "prompt": "Create a finished collectible abstract art card face, portrait aspect ratio 5:7, edge-to-edge artwork, no card mockup, no room or tabletop, no visible card edges, no typography or letters, no logos or watermark. Sophisticated contemporary museum-shop art direction: tactile cotton-paper grain, sculptural forms, crisp silhouettes, deliberate negative space, luminous soft directional light, a restrained palette with one bold accent. A compelling single composition that still reads beautifully at playing-card size. Rich material detail but clean, confident and joyful. Keep essential forms away from the outer 4 percent so the face can be trimmed. Theme GRAVITY. An impossible balance of a heavy matte charcoal sphere, an enormous folded vermilion-red ribbon arch and a tiny warm-gold moon suspended together over a warm ivory field. The ribbon folds through negative space like a fluid paper sculpture, with gorgeous deep red shadow and subtle grain. Off-center dynamic diagonal composition, expansive ivory negative space, Bauhaus meets poetic contemporary 3D sculpture. Visually striking and beautifully resolved, no stock decorative flat color bars."
+    },
+    {
+      "file": "resonance.png",
+      "prompt": "Create a finished collectible abstract art card face, portrait aspect ratio 5:7, edge-to-edge artwork, no card mockup, no room or tabletop, no visible card edges, no typography or letters, no logos or watermark. Sophisticated contemporary museum-shop art direction: tactile cotton-paper grain, sculptural forms, crisp silhouettes, deliberate negative space, luminous soft directional light, a restrained palette with one bold accent. A compelling single composition that still reads beautifully at playing-card size. Rich material detail but clean, confident and joyful. Keep essential forms away from the outer 4 percent so the face can be trimmed. Theme RESONANCE. A luminous ultramarine-blue glass torus cut by a pale apricot ceramic crescent, with a small vermilion sphere hovering between them. Ripple-like fine embossed lines in the warm ivory paper ground suggest sound without a literal diagram. Translucent blue refraction, tactile matte ceramic, controlled soft shadow, one daring asymmetrical composition with a strong silhouette. High-end experimental editorial sculpture, playful and serene."
+    },
+    {
+      "file": "orbit.png",
+      "prompt": "Create a finished collectible abstract art card face, portrait aspect ratio 5:7, edge-to-edge artwork, no card mockup, no room or tabletop, no visible card edges, no typography or letters, no logos or watermark. Sophisticated contemporary museum-shop art direction: tactile cotton-paper grain, sculptural forms, crisp silhouettes, deliberate negative space, luminous soft directional light, a restrained palette with one bold accent. A compelling single composition that still reads beautifully at playing-card size. Rich material detail but clean, confident and joyful. Keep essential forms away from the outer 4 percent so the face can be trimmed. Theme ORBIT. A large pale-sage folded paper crescent and a smaller intense cobalt-blue curved disk orbit around a central charcoal pebble, balanced on one fine warm-orange arc. The orbit bends through space in an impossible but elegant sculptural arrangement. Warm ivory textured ground, crisp cut edges and soft shadows, plenty of breathable negative space, subtle asymmetrical rhythm. Contemporary collectible art, whimsical and very polished."
+    }
+  ],
+  "note": "AI-generated abstract artwork for Deck documentation examples; no text is baked into the card faces."
+}
