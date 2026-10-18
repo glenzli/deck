@@ -690,7 +690,7 @@ Page {
                                         id: imageMenuButton
                                         objectName: root.currentLayout.mode !== "text" ? "deckImageMenuButton" : "deckHiddenImageMenuButton"
                                         Layout.fillWidth: true; expanded: true; quiet: true
-                                        iconSource: "../../icons/open.svg"; text: root.artworkName() + "  ⌄"
+                                        iconSource: "../../icons/image.svg"; text: root.artworkName() + "  ⌄"
                                         onClicked: imageMenu.openFor(imageMenuButton)
                                     }
                                     ToolButton { objectName: "cardKitImageInstructionToggle"; text: (root.showArtPrompt ? "⌄  " : "›  ") + qsTr("Image instruction"); font.pixelSize: 11; onClicked: root.showArtPrompt = !root.showArtPrompt }
@@ -739,14 +739,13 @@ Page {
                                     Layout.fillWidth: true
                                     Label { Layout.fillWidth: true; text: qsTr("Copies"); color: Theme.textSoft; font.pixelSize: 11 }
                                     ShapeSpinBox { objectName: "cardKitQuantity"; from: 1; to: 999; editable: true; value: root.currentCard ? root.currentCard.quantity : 1; onValueModified: root.setCardField("quantity", value); implicitWidth: 112; implicitHeight: 32 }
-                                }
-                                ShapeButton {
-                                    id: textImageMenuButton
-                                    objectName: root.currentLayout.mode === "text" ? "deckImageMenuButton" : "deckHiddenTextImageMenuButton"
-                                    visible: root.currentLayout.mode === "text"
-                                    Layout.fillWidth: true; expanded: true; quiet: true
-                                    text: qsTr("Image options…")
-                                    onClicked: imageMenu.openFor(textImageMenuButton)
+                                    ShapeIconButton {
+                                        id: textImageMenuButton
+                                        objectName: root.currentLayout.mode === "text" ? "deckImageMenuButton" : "deckHiddenTextImageMenuButton"
+                                        visible: root.currentLayout.mode === "text"
+                                        source: "../../icons/image.svg"; toolTipText: qsTr("Image options…")
+                                        onClicked: imageMenu.openFor(textImageMenuButton)
+                                    }
                                 }
                                 Label { objectName: "cardKitHiddenContent"; Layout.fillWidth: true; visible: text.length > 0; text: root.hiddenDescription(); color: Theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 11 }
                             }
@@ -955,8 +954,8 @@ Page {
             RowLayout {
                 Layout.fillWidth: true
                 Label { Layout.fillWidth: true; text: largePreview.actualSize ? qsTr("Actual size · Scroll to inspect the whole card") : qsTr("Fit to window"); color: Theme.muted; wrapMode: Text.WordWrap }
-                ShapeButton { objectName: "cardKitPreviewFit"; text: qsTr("Fit"); onClicked: largePreview.actualSize = false }
-                ShapeButton { objectName: "cardKitPreviewActual"; text: qsTr("Actual size"); onClicked: largePreview.actualSize = true }
+                ShapeIconButton { objectName: "cardKitPreviewFit"; source: "../../icons/fit.svg"; toolTipText: qsTr("Fit to window"); selected: !largePreview.actualSize; onClicked: largePreview.actualSize = false }
+                ShapeIconButton { objectName: "cardKitPreviewActual"; source: "../../icons/zoom-in.svg"; toolTipText: qsTr("Actual size"); selected: largePreview.actualSize; onClicked: largePreview.actualSize = true }
             }
             ScrollView {
                 id: previewScroll

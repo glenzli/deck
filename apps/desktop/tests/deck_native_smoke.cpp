@@ -25,10 +25,12 @@
 #include <QJsonDocument>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QQmlContext>
 #include <QQmlEngine>
 #include <QQmlExpression>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QSvgRenderer>
 #include <QTimer>
 #include <cmath>
 #include <filesystem>
@@ -97,6 +99,81 @@ QObject& child(QObject& owner, const char* name) {
     }
     require(found, name);
     return *found;
+}
+QJsonObject
+verifyIcon(QObject& button, QQuickWindow& window, const QImage& capture, const QString& evidence) {
+    auto* hitArea = qobject_cast<QQuickItem*>(&button);
+    auto* glyph = qobject_cast<QQuickItem*>(&child(button, "buttonIcon"));
+    const auto size = button.property("iconSize").toInt();
+    require(
+        hitArea && glyph && glyph->width() == size && glyph->height() == size
+            && hitArea->width() >= size + 10 && hitArea->height() >= size + 10,
+        "fixed-size icon leaves a generous hit area without stretching"
+    );
+    const auto scale = double(capture.width()) / window.width();
+    const auto logical = glyph->mapRectToScene(glyph->boundingRect());
+    const QRectF pixels(
+        logical.x() * scale,
+        logical.y() * scale,
+        logical.width() * scale,
+        logical.height() * scale
+    );
+    const auto bounds = pixels.toAlignedRect();
+    const auto backgroundPoint = hitArea->mapToScene(QPointF(2, hitArea->height() / 2));
+    const auto background = capture.pixelColor(
+        qRound(backgroundPoint.x() * scale),
+        qRound(backgroundPoint.y() * scale)
+    );
+    QImage reference(bounds.size(), QImage::Format_ARGB32_Premultiplied);
+    reference.fill(Qt::transparent);
+    const auto source =
+        QQmlEngine::contextForObject(glyph)->resolvedUrl(glyph->property("source").toUrl());
+    QSvgRenderer renderer(":" + source.path());
+    require(renderer.isValid(), "toolbar icon is a packaged vector");
+    {
+        QPainter painter(&reference);
+        painter.setRenderHint(QPainter::Antialiasing);
+        renderer.render(&painter, pixels.translated(-bounds.topLeft()));
+        painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        painter.fillRect(reference.rect(), glyph->property("color").value<QColor>());
+    }
+    QImage expected(bounds.size(), QImage::Format_ARGB32_Premultiplied);
+    expected.fill(background);
+    {
+        QPainter painter(&expected);
+        painter.drawImage(0, 0, reference);
+    }
+    // Compare actual pixels to a direct SVG render at the window's physical scale.
+    // This detects clipped, stretched or low-resolution cached icon artwork.
+    double error = 0;
+    for (int y = 0; y < bounds.height(); ++y)
+        for (int x = 0; x < bounds.width(); ++x) {
+            const auto actual = capture.pixelColor(bounds.x() + x, bounds.y() + y);
+            const auto wanted = expected.pixelColor(x, y);
+            error +=
+                (std::abs(actual.red() - wanted.red()) + std::abs(actual.green() - wanted.green())
+                 + std::abs(actual.blue() - wanted.blue()))
+                / 3.0;
+        }
+    error /= bounds.width() * bounds.height();
+    if (error >= 6) {
+        capture.copy(bounds).save(QDir(evidence).filePath("icon-actual.png"));
+        expected.save(QDir(evidence).filePath("icon-expected.png"));
+        throw std::runtime_error(
+            QString("Icon %1 at %2x (source DPR %3) differs from the native SVG render: %4")
+                .arg(button.objectName())
+                .arg(scale)
+                .arg(glyph->property("pixelRatio").toDouble())
+                .arg(error)
+                .toStdString()
+        );
+    }
+    return {
+        {"control", button.objectName()},
+        {"glyph_size", size},
+        {"pixel_ratio", scale},
+        {"mean_pixel_error", error}
+    };
 }
 void click(QQuickWindow& window, QObject& control) {
     auto* item = qobject_cast<QQuickItem*>(&control);
@@ -224,8 +301,12 @@ bool deck_native_smoke::verify(
         preferences.setLanguageMode("en");
         settle(150);
         require(
-            child(root, "cardKitPrint").property("text").toString() == "Accept & print…",
-            "unaccepted draft clearly names the explicit acceptance before printing"
+            child(root, "cardKitPrint").property("text").toString().isEmpty()
+                && child(root, "cardKitPrint").property("toolTipText").toString()
+                       == "Accept & print…"
+                && child(root, "cardKitPrint").property("accessibleName").toString()
+                       == "Accept & print…",
+            "icon-only printing keeps explicit acceptance in its tooltip and accessible name"
         );
         click(*window, child(root, "cardKitAddMenuButton"));
         require(
@@ -407,6 +488,18 @@ bool deck_native_smoke::verify(
                                           + 0.5,
                         "toolbar actions remain within the native window control safe areas"
                     );
+                    auto* heading = qobject_cast<QQuickItem*>(&child(root, "deckProjectHeading"));
+                    auto* print = qobject_cast<QQuickItem*>(&child(root, "cardKitPrint"));
+                    require(
+                        heading->property("lineCount").toInt() == 1 && heading->height() <= 20
+                            && print->width() == 32 && print->height() == 32
+                            && std::abs(
+                                   projectButton->mapToScene(projectButton->boundingRect().center())
+                                       .y()
+                                   - print->mapToScene(print->boundingRect().center()).y()
+                               ) < 0.5,
+                        "project heading and compact print action occupy one aligned toolbar row"
+                    );
                     const auto& preview = child(root, "cardKitPreviewImage");
                     const auto previewWidth = preview.property("paintedWidth").toDouble();
                     const auto previewHeight = preview.property("paintedHeight").toDouble();
@@ -423,6 +516,21 @@ bool deck_native_smoke::verify(
                     window->update();
                     settle(100);
                     const auto capture = window->grabWindow();
+                    QJsonArray iconEvidence;
+                    for (const auto* name :
+                         {"deckLanguageButton",
+                          "deckAppearanceButton",
+                          "deckSettingsButton",
+                          "cardKitPrint",
+                          "deckMoreMenuButton",
+                          "deckMoveCardUp",
+                          "deckMoveCardDown",
+                          "deckDuplicateCard",
+                          "cardKitEnlargePreview",
+                          "cardKitRowMenu-picture-text"})
+                        iconEvidence.append(
+                            verifyIcon(child(root, name), *window, capture, directory)
+                        );
                     auto* languageButton =
                         qobject_cast<QQuickItem*>(&child(root, "deckLanguageButton"));
                     const auto iconCenter = languageButton->mapToScene(
@@ -448,13 +556,18 @@ bool deck_native_smoke::verify(
                         previewWidth,
                         previewHeight
                     ));
+                    const QRectF physicalBounds(
+                        bounds.topLeft() * captureScale,
+                        bounds.size() * captureScale
+                    );
+                    const auto sampleStep = qMax(1, qRound(4 * captureScale));
                     int artworkPixels = 0;
-                    for (int y = std::max(0, int(bounds.top()));
-                         y < std::min(capture.height(), int(bounds.bottom()));
-                         y += 4)
-                        for (int x = std::max(0, int(bounds.left()));
-                             x < std::min(capture.width(), int(bounds.right()));
-                             x += 4) {
+                    for (int y = std::max(0, int(physicalBounds.top()));
+                         y < std::min(capture.height(), int(physicalBounds.bottom()));
+                         y += sampleStep)
+                        for (int x = std::max(0, int(physicalBounds.left()));
+                             x < std::min(capture.width(), int(physicalBounds.right()));
+                             x += sampleStep) {
                             const auto pixel = capture.pixelColor(x, y);
                             if (std::max({pixel.red(), pixel.green(), pixel.blue()})
                                     - std::min({pixel.red(), pixel.green(), pixel.blue()})
@@ -474,6 +587,7 @@ bool deck_native_smoke::verify(
                             {"visible_buttons", controls},
                             {"card_width", previewWidth},
                             {"card_height", previewHeight},
+                            {"icons", iconEvidence},
                             {"screenshot", path}
                         }
                     );
@@ -525,8 +639,11 @@ bool deck_native_smoke::verify(
         preferences.setLanguageMode("zh_CN");
         settle(200);
         require(
-            child(root, "cardKitPrint").property("text").toString() == QString::fromUtf8("打印…"),
-            "live Chinese card actions"
+            child(root, "cardKitPrint").property("toolTipText").toString()
+                    == QString::fromUtf8("打印…")
+                && child(root, "cardKitPrint").property("accessibleName").toString()
+                       == QString::fromUtf8("打印…"),
+            "live Chinese print tooltip and accessible name"
         );
         require(
             window->grabWindow().save(QDir(directory).filePath("deck-zh-1120.png")),

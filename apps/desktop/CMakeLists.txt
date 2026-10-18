@@ -47,6 +47,7 @@ add_custom_command(OUTPUT "${cli_binary}"
 add_custom_target(deck-cli-build DEPENDS "${cli_binary}")
 qt_add_executable(deck-desktop
     src/main.cpp src/deck_cli_client.cpp src/deck_cli_client.hpp
+    src/icon_image_provider.cpp src/icon_image_provider.hpp
     src/card_draft_assistant.cpp src/card_draft_assistant.hpp
     src/deck_document_controller.cpp src/deck_document_controller.hpp
     src/deck_exchange_controller.cpp src/deck_exchange_controller.hpp

@@ -10,6 +10,8 @@ own implementation facts. This initial repository is under active development.
 ## Ownership
 
 - Deck's application shell owns card navigation, project selection, user settings and presentation.
+  The icon image provider rasterizes packaged UI vectors at physical pixel density with theme
+  tinting; it is independent of the card artwork preview and print owners.
 - The pinned CardKit domain/core owners, adapted under `third_party/shape-domain` and
   `third_party/shape-core`, own card data, recoverable drafts, preview, accepted versions and
   card-face/print geometry. The reused Qt print owner paints both preview and PDF.

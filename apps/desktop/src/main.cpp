@@ -8,6 +8,7 @@
 #include "deck_native_smoke.hpp"
 #include "desktop_backend.hpp"
 #include "external_image_task_controller.hpp"
+#include "icon_image_provider.hpp"
 #include "image_preview_provider.hpp"
 #include "material_edit_controller.hpp"
 #include "pdf_command.hpp"
@@ -150,6 +151,7 @@ int main(int argc, char* argv[]) {
     QQmlApplicationEngine engine;
     preferences.attachEngine(engine);
     engine.addImageProvider("shape-preview", new ImagePreviewProvider(backend.imagePreviewStore()));
+    engine.addImageProvider("deck-icons", new DeckIconImageProvider());
     QObject::connect(
         &preferences,
         &UiPreferences::languageModeChanged,

@@ -48,16 +48,21 @@ Button {
         }
     }
 
-    contentItem: ShapeIcon {
-        anchors.centerIn: parent
-        source: control.source
-        size: control.iconSize
-        rotation: control.iconRotation
-        opacity: control.enabled ? 1.0 : 0.34
-        color: !control.enabled ? Theme.disabled
-                                : control.primary ? Theme.accentText
-                                                  : control.selected ? Theme.accent
-                                                                     : control.hovered ? Theme.text : Theme.textSoft
+    // Controls resize the content item to the hit area. Keep the glyph in a
+    // separate fixed-size item so a larger button never stretches its artwork.
+    contentItem: Item {
+        ShapeIcon {
+            objectName: "buttonIcon"
+            anchors.centerIn: parent
+            width: control.iconSize; height: control.iconSize
+            source: control.source
+            size: control.iconSize
+            rotation: control.iconRotation
+            color: !control.enabled ? Theme.disabled
+                                    : control.primary ? Theme.accentText
+                                                      : control.selected ? Theme.accent
+                                                                         : control.hovered ? Theme.text : Theme.textSoft
+        }
     }
 
     ToolTip {

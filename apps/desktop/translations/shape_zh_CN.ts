@@ -675,10 +675,6 @@
             <translation>适应窗口</translation>
         </message>
         <message>
-            <source>Fit</source>
-            <translation>适应窗口</translation>
-        </message>
-        <message>
             <source>Actual size</source>
             <translation>原始尺寸</translation>
         </message>

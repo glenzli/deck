@@ -71,7 +71,7 @@ ApplicationWindow {
         contentItem: Item {
             RowLayout {
                 anchors.fill: parent
-                spacing: 12
+                spacing: 10
                 Label {
                     text: "Deck"; font.pixelSize: 20; font.weight: Font.DemiBold; color: Theme.text
                     DragHandler {
@@ -84,18 +84,28 @@ ApplicationWindow {
                 ToolButton {
                     id: projectButton
                     objectName: "deckProjectMenuButton"
+                    readonly property string heading: window.backend.projectOpen
+                        ? window.backend.projectName + " / " + (cards.composition.name || qsTr("Card set"))
+                        : qsTr("Cards, your way")
                     Layout.minimumWidth: 140
-                    Layout.preferredWidth: Math.min(310, window.width * 0.24)
-                    implicitHeight: 48; leftPadding: 8; rightPadding: 8
+                    Layout.preferredWidth: Math.round(Math.min(400, window.width * 0.34))
+                    implicitHeight: Theme.iconButtonSize; leftPadding: 8; rightPadding: 8
                     Accessible.name: qsTr("Project menu")
+                    Accessible.description: heading
                     contentItem: RowLayout {
-                        ColumnLayout {
-                            Layout.fillWidth: true; spacing: 3
-                            Label { Layout.fillWidth: true; text: window.backend.projectOpen ? window.backend.projectName : qsTr("Cards, your way"); color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold; elide: Text.ElideRight }
-                            Label { Layout.fillWidth: true; visible: window.backend.projectOpen; text: cards.composition.name || qsTr("Card set"); color: Theme.muted; font.pixelSize: 11; elide: Text.ElideRight }
+                        spacing: 6
+                        Label {
+                            objectName: "deckProjectHeading"
+                            Layout.fillWidth: true
+                            text: projectButton.heading; color: Theme.text
+                            font.pixelSize: 13; font.weight: Font.Medium
+                            elide: Text.ElideRight; maximumLineCount: 1; wrapMode: Text.NoWrap
                         }
                         ShapeIcon { source: "qrc:/qt/qml/Shape/Desktop/icons/chevron-down.svg"; size: Theme.compactIconSize }
                     }
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 450
+                    ToolTip.text: heading
                     background: Rectangle { radius: 8; color: projectButton.hovered ? Theme.surfaceSubtle : "transparent" }
                     onClicked: projectMenu.popup(projectButton, 0, projectButton.height)
                 }
@@ -134,12 +144,12 @@ ApplicationWindow {
                     text: cards.dirty ? (window.cardKit.error.length ? qsTr("Not saved") : qsTr("Saving…")) : window.cardKit.currentAccepted ? qsTr("Version saved") : qsTr("Draft saved")
                     color: window.cardKit.error.length ? Theme.danger : Theme.muted; font.pixelSize: 11
                 }
-                ShapeButton {
+                ShapeIconButton {
                     objectName: "cardKitPrint"
                     visible: window.backend.projectOpen
-                    text: !cards.dirty && window.cardKit.currentAccepted ? qsTr("Print…") : qsTr("Accept & print…")
+                    toolTipText: !cards.dirty && window.cardKit.currentAccepted ? qsTr("Print…") : qsTr("Accept & print…")
                     primary: true; enabled: !window.cardPrint.running
-                    iconSource: "qrc:/qt/qml/Shape/Desktop/icons/print.svg"
+                    source: "qrc:/qt/qml/Shape/Desktop/icons/print.svg"
                     onClicked: cards.acceptAndPrint()
                 }
                 ShapeIconButton {
