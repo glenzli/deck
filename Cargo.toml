@@ -20,6 +20,8 @@ blake3 = "1.8.5"
 uuid = { version = "1.23.2", features = ["v7"] }
 rustix = { version = "1.1.4", features = ["fs"] }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
+infer-runtime-client = { git = "https://github.com/glenzli/infer-runtime.git", rev = "c74c503a27b74d76ab01bc1d9990d56e21c45969" }
+tokio = { version = "1", features = ["rt", "time", "net"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -20,6 +20,8 @@ struct Request {
     source: WorkingInput,
     #[serde(default)]
     options: shape_core::CardPrintRequestOptions,
+    #[serde(default)]
+    imposition: Option<crate::print::Imposition>,
     destination: PathBuf,
 }
 
@@ -162,6 +164,7 @@ pub fn export(path: &Path, request_path: &Path, desktop: Option<&Path>) -> Resul
     receipt["independently_verified"] = true.into();
     // Deserialize options even though the native owner remains the only planner/painter.
     let _ = request.options;
+    let _ = request.imposition;
     Ok(receipt)
 }
 

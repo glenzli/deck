@@ -1,4 +1,5 @@
 //! Deck only assembles card, material handoff and print owners; no Shape workbench.
+#include "card_draft_assistant.hpp"
 #include "card_kit_controller.hpp"
 #include "card_print_controller.hpp"
 #include "deck_cli_client.hpp"
@@ -11,6 +12,10 @@
 #include "material_edit_controller.hpp"
 #include "pdf_command.hpp"
 #include "ui_preferences.hpp"
+#if defined(Q_OS_MACOS)
+#include "mac_titlebar.hpp"
+#include <QQuickWindow>
+#endif
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFileInfo>
@@ -18,6 +23,7 @@
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QUuid>
@@ -119,13 +125,24 @@ int main(int argc, char* argv[]) {
                       .filePath("deck.conf");
     QDir().mkpath(QFileInfo(settings).absolutePath());
     DesktopBackend backend;
+    const bool hasSavedAppearance =
+        QSettings(settings, QSettings::IniFormat).contains("ui/appearanceMode");
     UiPreferences preferences(app, settings);
+    if (!hasSavedAppearance)
+        preferences.setAppearanceMode(static_cast<int>(UiPreferences::AppearanceMode::Light));
     CardKitController cards(backend, settings, &app);
-    CardPrintController print(backend, &app);
+    CardPrintController print(backend, cli, &app);
     MaterialEditController material(backend, settings, &app);
     DeckDocumentController documents(backend, cli, settings, &app);
     DeckExchangeController exchange(backend, cards, documents, settings, &app);
     ExternalImageTaskController imageTask(backend, cards, documents, settings, &app);
+    CardDraftAssistant assistant(cliPath, settings, &app);
+    QObject::connect(
+        &preferences,
+        &UiPreferences::languageModeChanged,
+        &assistant,
+        &CardDraftAssistant::changed
+    );
     if (parser.isSet("external-edit")
         && (!parser.isSet("result")
             || !exchange.load(parser.value("external-edit"), parser.value("result"))))
@@ -178,6 +195,7 @@ int main(int argc, char* argv[]) {
          {"documents", QVariant::fromValue(&documents)},
          {"exchange", QVariant::fromValue(&exchange)},
          {"imageTask", QVariant::fromValue(&imageTask)},
+         {"assistant", QVariant::fromValue(&assistant)},
          {"initialProject", parser.value("project")},
          {"initialKit", parser.value("kit")},
          {"smokeMode", smoke}}
@@ -185,6 +203,12 @@ int main(int argc, char* argv[]) {
     engine.loadFromModule("Shape.Desktop", "DeckWindow");
     if (engine.rootObjects().isEmpty())
         return 1;
+#if defined(Q_OS_MACOS)
+    const auto root = engine.rootObjects().first();
+    const auto titleBar = root->findChild<QObject*>(QStringLiteral("titleToolBar"));
+    const auto titleBarHeight = titleBar ? qRound(titleBar->property("height").toReal()) : 56;
+    installMacTitleBarAlignment(qobject_cast<QQuickWindow*>(root), titleBarHeight);
+#endif
     if (smoke)
         QTimer::singleShot(0, &app, [&] {
             const auto passed = deck_native_smoke::verify(

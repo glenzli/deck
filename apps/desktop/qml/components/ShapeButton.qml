@@ -11,7 +11,7 @@ Button {
     property bool quiet: false
     property bool busy: false
     property url iconSource
-    property int iconSize: 15
+    property int iconSize: Theme.compactIconSize
     property bool expanded: false
 
     // Action buttons use their content width; grouped navigation opts into equal widths.

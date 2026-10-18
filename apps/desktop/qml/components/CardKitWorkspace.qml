@@ -60,6 +60,9 @@ Page {
             && d.inputRevisionId === artworkOriginal.revision_id))
     property string artworkCandidateSource: ""
     property bool listApplied: false
+    required property CardDraftAssistant assistant
+    property string assistantLanguage: "en"
+    signal assistantSettingsRequested()
     property bool listFirstHeader: false
     property int cardIdSequence: 1
     property bool moreText: false
@@ -149,10 +152,45 @@ Page {
         next.cards.push({id: id, title: "", card_type: "", cost: "", rules: "", stats: "", flavor: "", art_prompt: "", quantity: 1, artwork: null, text_material: null})
         changed(next); selectedCardId = id
     }
+    function assistantIdentity() { return JSON.stringify([backend.projectId, backend.bundlePath, controller.draft, composition]) }
+    function openAssistant() {
+        if (!flush()) return false
+        assistantDialog.open(); return true
+    }
+    function appendAssistantCards(rows, identity) {
+        if (identity !== assistantIdentity() || !rows.length || rows.length > 16) {
+            localError = qsTr("The card set changed. Generate again for the current draft."); return false
+        }
+        const next = copy(composition)
+        next.cards = copy(CardListImport.effectiveCards(composition))
+        if (next.cards.length + rows.length > 64) { localError = qsTr("This set already contains 64 cards."); return false }
+        const ids = new Set(next.cards.map(c => c.id))
+        for (const row of rows) {
+            if (typeof row.title !== "string" || typeof row.rules !== "string" || !row.title.trim().length || !row.rules.trim().length) return false
+            const id = nextCardId(ids); ids.add(id)
+            next.cards.push({id: id, title: row.title, rules: row.rules, art_prompt: row.art_prompt || "",
+                card_type: "", cost: "", stats: "", flavor: "", quantity: 1, artwork: null, text_material: null,
+                layout: {mode: "text"}})
+        }
+        if (CardListImport.utf8Length(JSON.stringify(next)) > 60 * 1024) {
+            localError = qsTr("This list is too large for these cards. Add a smaller group."); return false
+        }
+        changed(next); selectedCardId = next.cards[next.cards.length - rows.length].id
+        if (!flush()) return false
+        assistantDialog.close(); return true
+    }
     function nextCardId(ids) {
         let id
         do { id = "card-" + Date.now().toString(36) + "-" + (cardIdSequence++).toString(36) } while (ids.has(id))
         return id
+    }
+    function duplicateCard() {
+        if (!currentCard || cards.length >= 64) return false
+        const next = copy(composition), index = next.cards.findIndex(c => c.id === selectedCardId)
+        const duplicate = copy(currentCard)
+        duplicate.id = nextCardId(new Set(next.cards.map(c => c.id)))
+        next.cards.splice(index + 1, 0, duplicate)
+        changed(next); selectedCardId = duplicate.id; return true
     }
     function openCardList() {
         if (!flush()) return
@@ -302,7 +340,7 @@ Page {
             if (!controller.accept()) return false
             acceptedNow = true
         }
-        const opened = printDialog.openForSource(controller.source, controller.preview.print_defaults)
+        const opened = printDialog.openForSource(controller.source, controller.preview.print_defaults, root.cards, root.selectedCardId)
         if (!opened && acceptedNow) localError = qsTr("The card version was accepted. Adjust the print layout in the opened window to continue.")
         return opened
     }
@@ -465,6 +503,7 @@ Page {
                 addMenu.close(); imageMenu.close(); cardActions.close()
                 saveTimer.stop(); previewTimer.stop(); root.dirty = false; root.close()
                 shapeTaskDialog.close(); refinementDialog.close(); root.clearArtwork()
+                assistantDialog.close(); root.assistant.discard()
                 listDialog.close(); largePreview.close(); imageImport.close(); zipExport.close(); printDialog.close(); setLayoutDialog.close()
             }
         }
@@ -516,13 +555,11 @@ Page {
                         Layout.fillWidth: true
                         Label { Layout.fillWidth: true; text: qsTr("Cards"); font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text }
                         Label { text: root.cards.length; font.pixelSize: 12; color: Theme.muted }
-                        ToolButton {
+                        ShapeIconButton {
                             id: addButton
                             objectName: "cardKitAddMenuButton"
-                            text: qsTr("+ Add"); font.pixelSize: 12; implicitWidth: 66; implicitHeight: 30
-                            Accessible.name: qsTr("Add cards")
+                            source: "../../icons/add.svg"; toolTipText: qsTr("Add cards")
                             onClicked: { addMenu.targetIdentity = root.menuIdentity(false); addMenu.popup(addButton, 0, addButton.height) }
-                            background: Rectangle { radius: 7; color: addButton.hovered ? Theme.surfaceSubtle : "transparent" }
                         }
                     }
                     ListView {
@@ -564,19 +601,18 @@ Page {
                                         Rectangle { width: 5; height: 5; radius: 3; color: Theme.warning; visible: root.cardNeedsAttention(cardRow.card) }
                                     }
                                 }
-                                ToolButton {
+                                ShapeIconButton {
                                     objectName: "cardKitRowMenu-" + (cardRow.card.id || "")
                                     visible: cardRow.hovered || root.selectedCardId === cardRow.card.id
-                                    implicitWidth: 20; implicitHeight: 28; text: "⋮"; font.pixelSize: 18
-                                    Accessible.name: qsTr("Card actions")
+                                    buttonSize: 28; iconSize: Theme.compactIconSize; source: "../../icons/more.svg"; toolTipText: qsTr("Card actions")
                                     onClicked: { root.selectedCardId = cardRow.card.id; cardActions.targetIdentity = root.menuIdentity(true); cardActions.popup() }
-                                    background: Rectangle { color: parent.hovered ? Theme.buttonGhostHover : "transparent"; radius: 5 }
                                 }
                             }
                         }
                         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                     }
                     Label { Layout.fillWidth: true; text: qsTr("%1 copies in this set").arg(root.cards.reduce((sum, card) => sum + (card.quantity || 1), 0)); font.pixelSize: 11; color: Theme.muted; wrapMode: Text.WordWrap }
+                    ShapeButton { objectName: "deckCreateWithAI"; iconSource: "../../icons/sparkle.svg"; expanded: true; Layout.fillWidth: true; quiet: true; text: qsTr("Create with AI…"); enabled: root.cards.length < 64 && !root.assistant.busy; onClicked: root.openAssistant() }
                 }
             }
             Rectangle { Layout.fillHeight: true; implicitWidth: 1; color: Theme.border }
@@ -591,7 +627,10 @@ Page {
                             Label { Layout.fillWidth: true; text: root.currentCard ? root.cardName(root.currentCard) : qsTr("Your card"); color: Theme.text; font.pixelSize: 20; font.weight: Font.DemiBold; elide: Text.ElideRight }
                             Label { text: qsTr("Card %1 of %2").arg(Math.max(1, root.cards.findIndex(c => c.id === root.selectedCardId) + 1)).arg(root.cards.length); color: Theme.muted; font.pixelSize: 11 }
                         }
-                        ShapeButton { objectName: "cardKitEnlargePreview"; quiet: true; text: qsTr("Enlarge"); enabled: root.controller.previewSource.length > 0; onClicked: root.openLargePreview() }
+                        ShapeIconButton { objectName: "deckMoveCardUp"; source: "../../icons/arrow-up.svg"; toolTipText: qsTr("Move card up"); enabled: root.cards.findIndex(c => c.id === root.selectedCardId) > 0; onClicked: root.moveCard(-1) }
+                        ShapeIconButton { objectName: "deckMoveCardDown"; source: "../../icons/arrow-down.svg"; toolTipText: qsTr("Move card down"); enabled: root.cards.findIndex(c => c.id === root.selectedCardId) < root.cards.length - 1; onClicked: root.moveCard(1) }
+                        ShapeIconButton { objectName: "deckDuplicateCard"; source: "../../icons/duplicate.svg"; toolTipText: qsTr("Duplicate card"); enabled: root.currentCard !== null && root.cards.length < 64; onClicked: root.duplicateCard() }
+                        ShapeIconButton { objectName: "cardKitEnlargePreview"; source: "../../icons/zoom-in.svg"; toolTipText: qsTr("Enlarge"); enabled: root.controller.previewSource.length > 0; onClicked: root.openLargePreview() }
                     }
                 }
                 Rectangle {
@@ -627,8 +666,8 @@ Page {
                     anchors.fill: parent; spacing: 0
                     RowLayout {
                         Layout.fillWidth: true; Layout.margins: 14; spacing: 4
-                        ShapeButton { objectName: "deckContentTab"; Layout.fillWidth: true; expanded: true; quiet: true; selected: root.inspectorTab === 0; text: qsTr("Content"); onClicked: root.inspectorTab = 0 }
-                        ShapeButton { objectName: "deckLayoutTab"; Layout.fillWidth: true; expanded: true; quiet: true; selected: root.inspectorTab === 1; text: qsTr("Layout"); onClicked: root.inspectorTab = 1 }
+                        ShapeButton { objectName: "deckContentTab"; iconSource: "../../icons/edit.svg"; Layout.fillWidth: true; expanded: true; quiet: true; selected: root.inspectorTab === 0; text: qsTr("Content"); onClicked: root.inspectorTab = 0 }
+                        ShapeButton { objectName: "deckLayoutTab"; iconSource: "../../icons/layout.svg"; Layout.fillWidth: true; expanded: true; quiet: true; selected: root.inspectorTab === 1; text: qsTr("Layout"); onClicked: root.inspectorTab = 1 }
                     }
                     ScrollView {
                         id: inspectorScroll
@@ -698,7 +737,7 @@ Page {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Label { Layout.fillWidth: true; text: qsTr("Copies"); color: Theme.textSoft; font.pixelSize: 11 }
-                                    SpinBox { objectName: "cardKitQuantity"; from: 1; to: 999; editable: true; value: root.currentCard ? root.currentCard.quantity : 1; onValueModified: root.setCardField("quantity", value); implicitWidth: 112; implicitHeight: 32 }
+                                    ShapeSpinBox { objectName: "cardKitQuantity"; from: 1; to: 999; editable: true; value: root.currentCard ? root.currentCard.quantity : 1; onValueModified: root.setCardField("quantity", value); implicitWidth: 112; implicitHeight: 32 }
                                 }
                                 ShapeButton {
                                     id: textImageMenuButton
@@ -756,7 +795,7 @@ Page {
                                     ShapeComboBox {
                                         objectName: "cardKitShape"; Layout.fillWidth: true
                                         model: [qsTr("Keep current proportions"), qsTr("Portrait · 5:7"), qsTr("Landscape · 7:5"), qsTr("Square · 1:1"), qsTr("Landscape · 3:2"), qsTr("Portrait · 2:3")]
-                                        currentIndex: {
+                                        selectedIndex: {
                                             const w = root.composition.canvas_width || 750, h = root.composition.canvas_height || 1050
                                             if (w * 7 === h * 5) return 1
                                             if (w * 5 === h * 7) return 2
@@ -834,19 +873,31 @@ Page {
         id: addMenu; objectName: "cardKitAddMenu"
         property string targetIdentity: ""
         readonly property bool targetCurrent: targetIdentity === root.menuIdentity(false)
-        MenuItem { objectName: "cardKitAddCard"; text: qsTr("Blank card"); enabled: addMenu.targetCurrent && root.cards.length < 64; onTriggered: if (addMenu.targetCurrent) root.addCard() }
-        MenuItem { objectName: "cardKitAddImages"; text: qsTr("Existing card images…"); enabled: addMenu.targetCurrent && root.cards.length < 64; onTriggered: if (addMenu.targetCurrent) root.beginCardImages() }
-        MenuItem { objectName: "cardKitAddFromList"; text: qsTr("Cards from a list…"); enabled: addMenu.targetCurrent && root.cards.length < 64; onTriggered: if (addMenu.targetCurrent) root.openCardList() }
+        MenuItem { objectName: "cardKitAddCard"; icon.source: "../../icons/add.svg"; icon.color: Theme.text; text: qsTr("Blank card"); enabled: addMenu.targetCurrent && root.cards.length < 64; onTriggered: if (addMenu.targetCurrent) root.addCard() }
+        MenuItem { objectName: "cardKitAddImages"; icon.source: "../../icons/image.svg"; icon.color: Theme.text; text: qsTr("Existing card images…"); enabled: addMenu.targetCurrent && root.cards.length < 64; onTriggered: if (addMenu.targetCurrent) root.beginCardImages() }
+        MenuItem { objectName: "cardKitAddFromList"; icon.source: "../../icons/layout.svg"; icon.color: Theme.text; text: qsTr("Cards from a list…"); enabled: addMenu.targetCurrent && root.cards.length < 64; onTriggered: if (addMenu.targetCurrent) root.openCardList() }
+        MenuSeparator {}
+        MenuItem { objectName: "deckAddAICards"; icon.source: "../../icons/sparkle.svg"; icon.color: Theme.text; text: qsTr("Create cards with AI…"); enabled: addMenu.targetCurrent && root.cards.length < 64 && !root.assistant.busy; onTriggered: if (addMenu.targetCurrent) root.openAssistant() }
     }
     Menu {
         popupType: Popup.Item
         id: cardActions; objectName: "cardKitCardActions"
         property string targetIdentity: ""
         readonly property bool targetCurrent: targetIdentity === root.menuIdentity(true)
-        MenuItem { objectName: "cardKitMoveUp"; text: qsTr("Move up"); enabled: cardActions.targetCurrent && root.cards.findIndex(c => c.id === root.selectedCardId) > 0; onTriggered: if (cardActions.targetCurrent) root.moveCard(-1) }
-        MenuItem { objectName: "cardKitMoveDown"; text: qsTr("Move down"); enabled: cardActions.targetCurrent && root.cards.findIndex(c => c.id === root.selectedCardId) < root.cards.length - 1; onTriggered: if (cardActions.targetCurrent) root.moveCard(1) }
+        MenuItem { objectName: "deckDuplicateCardMenu"; icon.source: "../../icons/duplicate.svg"; icon.color: Theme.text; text: qsTr("Duplicate card"); enabled: cardActions.targetCurrent && root.cards.length < 64; onTriggered: if (cardActions.targetCurrent) root.duplicateCard() }
+        MenuItem { objectName: "cardKitMoveUp"; icon.source: "../../icons/arrow-up.svg"; icon.color: Theme.text; text: qsTr("Move up"); enabled: cardActions.targetCurrent && root.cards.findIndex(c => c.id === root.selectedCardId) > 0; onTriggered: if (cardActions.targetCurrent) root.moveCard(-1) }
+        MenuItem { objectName: "cardKitMoveDown"; icon.source: "../../icons/arrow-down.svg"; icon.color: Theme.text; text: qsTr("Move down"); enabled: cardActions.targetCurrent && root.cards.findIndex(c => c.id === root.selectedCardId) < root.cards.length - 1; onTriggered: if (cardActions.targetCurrent) root.moveCard(1) }
         MenuSeparator {}
-        MenuItem { objectName: "cardKitRemoveCard"; text: qsTr("Remove card"); enabled: cardActions.targetCurrent && root.cards.length > 1; onTriggered: if (cardActions.targetCurrent) root.removeCard() }
+        MenuItem { objectName: "cardKitRemoveCard"; icon.source: "../../icons/trash.svg"; icon.color: Theme.text; text: qsTr("Remove card"); enabled: cardActions.targetCurrent && root.cards.length > 1; onTriggered: if (cardActions.targetCurrent) root.removeCard() }
+    }
+    CardDraftDialog {
+        id: assistantDialog
+        assistant: root.assistant
+        currentIdentity: root.assistantIdentity()
+        language: root.assistantLanguage
+        availableCards: 64 - CardListImport.effectiveCards(root.composition).length
+        onAppendRequested: (rows, identity) => root.appendAssistantCards(rows, identity)
+        onSettingsRequested: root.assistantSettingsRequested()
     }
     Menu {
         popupType: Popup.Item
@@ -854,8 +905,8 @@ Page {
         property string targetIdentity: ""
         readonly property bool targetCurrent: targetIdentity === root.menuIdentity(true)
         function openFor(button) { targetIdentity = root.menuIdentity(true); popup(button, 0, button.height) }
-        MenuItem { objectName: "cardKitImportArtwork"; text: qsTr("Import image…"); enabled: imageMenu.targetCurrent; onTriggered: if (imageMenu.targetCurrent) root.beginImageImport() }
-        MenuItem { objectName: "cardKitGenerateArtwork"; text: qsTr("Create image in Shape…"); enabled: imageMenu.targetCurrent; onTriggered: if (imageMenu.targetCurrent) root.openArtworkGeneration() }
+        MenuItem { objectName: "cardKitImportArtwork"; icon.source: "../../icons/open.svg"; icon.color: Theme.text; text: qsTr("Import image…"); enabled: imageMenu.targetCurrent; onTriggered: if (imageMenu.targetCurrent) root.beginImageImport() }
+        MenuItem { objectName: "cardKitGenerateArtwork"; icon.source: "../../icons/sparkle.svg"; icon.color: Theme.text; text: qsTr("Create image in Shape…"); enabled: imageMenu.targetCurrent; onTriggered: if (imageMenu.targetCurrent) root.openArtworkGeneration() }
         Menu {
         popupType: Popup.Item
             id: acceptedImages; objectName: "cardKitArtworkPicker"; title: qsTr("Images in this project")
@@ -869,7 +920,7 @@ Page {
         }
         MenuItem { objectName: "cardKitRefineArtwork"; text: root.artworkTargetExists && root.editingArtwork && root.artworkCardId === root.selectedCardId ? qsTr("Continue in Shadow…") : qsTr("Refine in Shadow…"); enabled: imageMenu.targetCurrent && root.currentCard !== null && !!root.currentCard.artwork; onTriggered: if (imageMenu.targetCurrent) root.beginArtworkEdit() }
         MenuSeparator {}
-        MenuItem { objectName: "cardKitRemoveImage"; text: qsTr("Remove image"); enabled: imageMenu.targetCurrent && root.currentCard !== null && !!root.currentCard.artwork; onTriggered: if (imageMenu.targetCurrent) root.removeArtwork() }
+        MenuItem { objectName: "cardKitRemoveImage"; icon.source: "../../icons/trash.svg"; icon.color: Theme.text; text: qsTr("Remove image"); enabled: imageMenu.targetCurrent && root.currentCard !== null && !!root.currentCard.artwork; onTriggered: if (imageMenu.targetCurrent) root.removeArtwork() }
     }
     function exportKitFiles(file, projectId, projectPath, sourcePin) {
         if (projectId !== backend.projectId || projectPath !== backend.bundlePath
@@ -878,7 +929,7 @@ Page {
         if (success) fileExported(file.toString(), "zip", sourcePin)
         return success
     }
-    CardPrintDialog { id: printDialog; backend: root.backend; controller: root.cardPrint; onFileExported: (path, source) => root.fileExported(path, "pdf", source) }
+    CardPrintDialog { id: printDialog; backend: root.backend; controller: root.cardPrint; onEditCardRequested: cardId => { root.selectedCardId = cardId; root.inspectorTab = 0; root.localError = "" }; onFileExported: (path, source) => root.fileExported(path, "pdf", source) }
     CardImageIntakeDialog {
         id: imageIntake
         backend: root.backend; controller: root.controller
@@ -937,7 +988,7 @@ Page {
             spacing: 10
             Label { Layout.fillWidth: true; text: qsTr("Paste one card per row, or copy table columns for title, text and image description. A title or body text is enough. A single column keeps every row as a card."); wrapMode: Text.WordWrap; color: Theme.muted }
             ShapeTextEditor { id: listText; objectName: "cardKitListText"; Layout.fillWidth: true; Layout.preferredHeight: 200; wrapMode: TextEdit.NoWrap; placeholderText: qsTr("Paste your rows here…") }
-            CheckBox { objectName: "cardKitListHasHeading"; text: qsTr("First row contains column headings"); checked: root.listFirstHeader; onToggled: root.listFirstHeader = checked }
+            ShapeCheckBox { objectName: "cardKitListHasHeading"; text: qsTr("First row contains column headings"); checked: root.listFirstHeader; onToggled: root.listFirstHeader = checked }
             Label { objectName: "cardKitListSummary"; Layout.fillWidth: true; text: root.listPreview.error.length ? root.cardListError() : root.listPreview.replacesPlaceholder ? qsTr("New cards: %1. The empty starter card will be replaced.").arg(root.listPreview.rows.length) : qsTr("New cards: %1. Existing cards stay as they are.").arg(root.listPreview.rows.length); color: root.listPreview.error.length && root.listPreview.error !== "empty" ? Theme.danger : Theme.text; wrapMode: Text.WordWrap }
             Label { Layout.fillWidth: true; visible: root.listPreview.headerSkipped; text: qsTr("The column heading row is skipped."); color: Theme.muted }
             Label { Layout.fillWidth: true; visible: root.listPreview.duplicateCount > 0; text: qsTr("Repeated titles are kept as separate cards: %1.").arg(root.listPreview.duplicateCount); color: Theme.warning; wrapMode: Text.WordWrap }

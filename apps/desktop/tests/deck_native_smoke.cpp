@@ -1,4 +1,5 @@
 #include "deck_native_smoke.hpp"
+#include "card_draft_assistant_smoke.hpp"
 #include "card_kit_controller.hpp"
 #include "card_print_controller.hpp"
 #include "card_print_export.hpp"
@@ -58,12 +59,13 @@ bool wait(const std::function<bool()>& done, int limit = 45000) {
         settle(20);
     return done();
 }
-void evaluate(QObject& owner, const QString& script) {
+QVariant evaluate(QObject& owner, const QString& script) {
     QQmlExpression expression(QQmlEngine::contextForObject(&owner), &owner, script);
-    expression.evaluate();
+    const auto result = expression.evaluate();
     if (expression.hasError())
         throw std::runtime_error(expression.error().toString().toStdString());
     QCoreApplication::processEvents();
+    return result;
 }
 QVariant value(QObject& owner, const char* name) {
     const auto result = owner.property(name);
@@ -97,13 +99,19 @@ QObject& child(QObject& owner, const char* name) {
 }
 void click(QQuickWindow& window, QObject& control) {
     auto* item = qobject_cast<QQuickItem*>(&control);
-    require(item && item->isVisible() && item->isEnabled(), "visible interactive control");
+    if (!item || !item->isVisible() || !item->isEnabled())
+        throw std::runtime_error(
+            (QStringLiteral("visible interactive control: ") + control.objectName()).toStdString()
+        );
     const auto position = item->mapToScene(item->boundingRect().center());
     require(
         QRectF(0, 0, window.width(), window.height()).contains(position),
         "interaction within window"
     );
     const auto global = window.mapToGlobal(position.toPoint());
+    QMouseEvent
+        move(QEvent::MouseMove, position, global, Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(&window, &move);
     QMouseEvent press(
         QEvent::MouseButtonPress,
         position,
@@ -166,6 +174,16 @@ bool deck_native_smoke::verify(
         require(QDir().mkpath(directory), "evidence directory");
         auto* window = qobject_cast<QQuickWindow*>(&root);
         require(window, "actual Deck window");
+        require(
+            window->flags().testFlag(Qt::ExpandedClientAreaHint)
+                && window->flags().testFlag(Qt::NoTitleBarBackgroundHint),
+            "native title area and toolbar share the window surface"
+        );
+        auto& titleBar = child(root, "titleToolBar");
+        require(
+            preferences.appearanceMode() == 1 && !preferences.dark(),
+            "fresh Deck profile defaults to light appearance"
+        );
         const QImage branding(QStringLiteral(":/branding/app-icon.png"));
         require(
             !branding.isNull() && branding.size() == QSize(1024, 1024)
@@ -235,6 +253,14 @@ bool deck_native_smoke::verify(
             qobject_cast<QQuickItem*>(&child(root, "cardKitSetLayoutDialog"))
                 && child(root, "cardKitShape").property("visible").toBool(),
             "whole-set layout is editable inline beside the card"
+        );
+        const auto cardIdsBeforePreset = value(workspace, "cards").toList();
+        click(*window, child(child(root, "cardKitDefaultLayoutOptions"), "cardPreset-study"));
+        require(
+            value(workspace, "composition").toMap().value("layout").toMap().value("text_align")
+                    == "left"
+                && value(workspace, "cards").toList() == cardIdsBeforePreset,
+            "visual preset changes only layout and preserves card content and IDs"
         );
         click(*window, child(root, "deckContentTab"));
         click(*window, child(root, "deckImageMenuButton"));
@@ -314,36 +340,106 @@ bool deck_native_smoke::verify(
         const auto count = backend.artifactCount();
         evaluate(workspace, "selectedCardId = 'picture-text'; synchronize()");
         QJsonArray uiEvidence;
-        for (const auto& size : {QSize(1280, 840), QSize(1120, 720)}) {
+        for (const auto& size : {QSize(1280, 840), QSize(1120, 720), QSize(980, 680)}) {
             window->resize(size);
-            for (const auto& language : {QStringLiteral("en"), QStringLiteral("zh_CN")}) {
-                preferences.setLanguageMode(language);
-                settle(200);
-                const auto controls = visibleButtons(window->contentItem(), *window);
-                const auto& preview = child(root, "cardKitPreviewImage");
-                const auto previewWidth = preview.property("paintedWidth").toDouble();
-                const auto previewHeight = preview.property("paintedHeight").toDouble();
-                require(
-                    previewWidth > 300 && previewHeight > 400,
-                    "card face dominates the workbench"
-                );
-                require(controls <= 16, "secondary commands do not fill the resting workbench");
-                const auto path = QDir(directory).filePath(
-                    QString("deck-%1-%2.png").arg(language == "en" ? "en" : "zh").arg(size.width())
-                );
-                require(window->grabWindow().save(path), "bilingual workbench screenshot");
-                uiEvidence.append(
-                    QJsonObject{
-                        {"width", size.width()},
-                        {"language", language},
-                        {"visible_buttons", controls},
-                        {"card_width", previewWidth},
-                        {"card_height", previewHeight},
-                        {"screenshot", path}
-                    }
-                );
+            for (const auto appearance : {1, 2}) {
+                preferences.setAppearanceMode(appearance);
+                for (const auto& language : {QStringLiteral("en"), QStringLiteral("zh_CN")}) {
+                    preferences.setLanguageMode(language);
+                    settle(200);
+                    const auto chromeColor = window->color();
+                    require(
+                        chromeColor.red() == chromeColor.green()
+                            && chromeColor.green() == chromeColor.blue(),
+                        "main UI is neutral in both appearances"
+                    );
+                    const auto controls = visibleButtons(window->contentItem(), *window);
+                    const auto* projectButton =
+                        qobject_cast<QQuickItem*>(&child(root, "deckProjectMenuButton"));
+                    const auto* moreButton =
+                        qobject_cast<QQuickItem*>(&child(root, "deckMoreMenuButton"));
+                    require(
+                        projectButton->mapToScene(QPointF(0, 0)).x()
+                                >= titleBar.property("leftPadding").toDouble()
+                            && moreButton->mapToScene(QPointF(moreButton->width(), 0)).x()
+                                   <= window->width() - titleBar.property("rightPadding").toDouble()
+                                          + 0.5,
+                        "toolbar actions remain within the native window control safe areas"
+                    );
+                    const auto& preview = child(root, "cardKitPreviewImage");
+                    const auto previewWidth = preview.property("paintedWidth").toDouble();
+                    const auto previewHeight = preview.property("paintedHeight").toDouble();
+                    require(
+                        previewWidth > 300 && previewHeight > 400,
+                        "card face dominates the workbench"
+                    );
+                    require(controls <= 23, "compact controls keep the resting workbench bounded");
+                    const auto path =
+                        QDir(directory).filePath(QString("deck-%1-%2-%3.png")
+                                                     .arg(language == "en" ? "en" : "zh")
+                                                     .arg(size.width())
+                                                     .arg(appearance == 1 ? "light" : "dark"));
+                    window->update();
+                    settle(100);
+                    const auto capture = window->grabWindow();
+                    auto* languageButton =
+                        qobject_cast<QQuickItem*>(&child(root, "deckLanguageButton"));
+                    const auto iconCenter = languageButton->mapToScene(
+                        QPointF(languageButton->width() / 2, languageButton->height() / 2)
+                    );
+                    const auto captureScale = double(capture.width()) / window->width();
+                    int iconPixels = 0;
+                    for (int y = int((iconCenter.y() - 9) * captureScale);
+                         y < int((iconCenter.y() + 9) * captureScale);
+                         ++y)
+                        for (int x = int((iconCenter.x() - 9) * captureScale);
+                             x < int((iconCenter.x() + 9) * captureScale);
+                             ++x) {
+                            const auto pixel = capture.pixelColor(x, y);
+                            if (appearance == 2 ? pixel.lightness() > 140 : pixel.lightness() < 120)
+                                ++iconPixels;
+                        }
+                    require(iconPixels > 12, "toolbar icons contrast with both appearances");
+                    auto* face = qobject_cast<QQuickItem*>(&child(root, "cardKitPreviewImage"));
+                    const auto bounds = face->mapRectToScene(QRectF(
+                        (face->width() - previewWidth) / 2,
+                        (face->height() - previewHeight) / 2,
+                        previewWidth,
+                        previewHeight
+                    ));
+                    int artworkPixels = 0;
+                    for (int y = std::max(0, int(bounds.top()));
+                         y < std::min(capture.height(), int(bounds.bottom()));
+                         y += 4)
+                        for (int x = std::max(0, int(bounds.left()));
+                             x < std::min(capture.width(), int(bounds.right()));
+                             x += 4) {
+                            const auto pixel = capture.pixelColor(x, y);
+                            if (std::max({pixel.red(), pixel.green(), pixel.blue()})
+                                    - std::min({pixel.red(), pixel.green(), pixel.blue()})
+                                > 30)
+                                ++artworkPixels;
+                        }
+                    require(capture.save(path), "bilingual workbench screenshot");
+                    require(
+                        artworkPixels > 100,
+                        "card artwork stays visible across language and appearance switches"
+                    );
+                    uiEvidence.append(
+                        QJsonObject{
+                            {"width", size.width()},
+                            {"language", language},
+                            {"appearance", appearance == 1 ? "light" : "dark"},
+                            {"visible_buttons", controls},
+                            {"card_width", previewWidth},
+                            {"card_height", previewHeight},
+                            {"screenshot", path}
+                        }
+                    );
+                }
             }
         }
+        preferences.setAppearanceMode(1);
         preferences.setLanguageMode("en");
         click(*window, child(root, "deckImageMenuButton"));
         evaluate(workspace, "selectedCardId = 'landscape'");
@@ -442,6 +538,84 @@ bool deck_native_smoke::verify(
             window->grabWindow().save(QDir(directory).filePath("deck-print-en-1120.png")),
             "print layout actual window"
         );
+        auto& printDialog = child(root, "cardPrintDialog");
+        const auto previousPlanVersion = printing.version();
+        click(*window, child(root, "cardSheetPreset-2x3"));
+        settle(240);
+        require(
+            printing.ready() && printing.plan().value("columns").toInt() == 2
+                && printing.plan().value("rows").toInt() == 3
+                && printing.plan().value("page_count").toInt() == 2,
+            "quick grid applies exact two-column three-row layout"
+        );
+        const auto stalePdf = QDir(directory).filePath("stale-print.pdf");
+        require(
+            !printing.exportPdf(QUrl::fromLocalFile(stalePdf), previousPlanVersion)
+                && !QFileInfo::exists(stalePdf),
+            "changed sheet rejects stale export snapshot"
+        );
+        evaluate(printDialog, "contentMode = 1; refresh()");
+        require(
+            printing.ready() && printing.plan().value("total_copies").toInt() == 3
+                && printing.plan().value("page_count").toInt() == 1,
+            "different designs mix on one A4 sheet without changing authored quantities"
+        );
+        require(
+            window->grabWindow().save(QDir(directory).filePath("deck-print-mixed.png")),
+            "mixed sheet screenshot"
+        );
+        const auto mixedPdf = QDir(directory).filePath("mixed-native.pdf");
+        require(
+            printing.exportPdf(QUrl::fromLocalFile(mixedPdf), printing.version())
+                && wait([&] { return !printing.running(); }) && printing.error().isEmpty(),
+            "mixed-card sheet exports through the same native PDF writer"
+        );
+        evaluate(
+            printDialog,
+            "contentMode = 2; selectedCardId = 'landscape'; fillSheet = true; refresh()"
+        );
+        require(
+            printing.ready() && printing.plan().value("total_copies").toInt() == 6,
+            "one selected card repeats across the complete six-up sheet"
+        );
+        auto* gridNumber = qobject_cast<QQuickItem*>(&child(root, "cardPrintColumns"));
+        auto* fillCheck = qobject_cast<QQuickItem*>(&child(root, "cardPrintFillSheet"));
+        require(
+            gridNumber && fillCheck && gridNumber->height() <= 30 && fillCheck->height() <= 30,
+            "numeric and checkbox controls use compact desktop density"
+        );
+        window->resize(980, 720);
+        preferences.setAppearanceMode(2);
+        preferences.setLanguageMode("zh_CN");
+        settle(200);
+        require(
+            child(root, "cardPrintContent").property("currentIndex").toInt() == 2
+                && child(root, "cardPrintContent").property("displayText").toString()
+                       == QString::fromUtf8("单卡重复")
+                && child(root, "cardPrintSelectedCard").property("currentIndex").toInt() == 1,
+            "language switch preserves the displayed repeat mode and selected card"
+        );
+        require(
+            window->grabWindow().save(
+                QDir(directory).filePath("deck-print-repeat-zh-dark-980.png")
+            ),
+            "compact dark Chinese sheet screenshot"
+        );
+        const auto repeatPdf = QDir(directory).filePath("repeat-native.pdf");
+        require(
+            printing.exportPdf(QUrl::fromLocalFile(repeatPdf), printing.version())
+                && wait([&] { return !printing.running(); }) && printing.error().isEmpty(),
+            "single-card repeat exports a real PDF"
+        );
+        window->resize(1120, 780);
+        preferences.setAppearanceMode(1);
+        preferences.setLanguageMode("en");
+        evaluate(printDialog, "contentMode = 0; chooseGrid(3,3); refresh()");
+        settle(150);
+        require(
+            cards.source() == source && backend.artifactCount() == count,
+            "imposition never creates a revision or changes the accepted source"
+        );
         const auto pdf = QDir(directory).filePath("cards-native.pdf");
         require(
             printing.exportPdf(QUrl::fromLocalFile(pdf), printing.version())
@@ -461,6 +635,7 @@ bool deck_native_smoke::verify(
             {{"schema", "deck.pdf-export/1"},
              {"project", QString(project).replace("/private/tmp/", "/tmp/")},
              {"source", QJsonObject::fromVariantMap(source)},
+             {"imposition", QJsonObject{{"columns", 2}, {"rows", 2}, {"content", "one_each"}}},
              {"destination", QDir(directory).filePath("cards-cli.pdf")}}
         );
         const auto exported = documents.cli().run(
@@ -778,6 +953,94 @@ bool deck_native_smoke::verify(
             wait([&] { return !imageTask.running(); }, 6000) && !imageTask.error().isEmpty(),
             "old executable rejected before image launch"
         );
+        click(*window, child(root, "deckCreateWithAI"));
+        require(
+            child(root, "deckAssistantDialog").property("visible").toBool(),
+            "AI workflow opens from the card list"
+        );
+        require(
+            !child(root, "deckAssistantGenerate").property("enabled").toBool(),
+            "empty brief cannot start a model request"
+        );
+        require(
+            window->grabWindow().save(QDir(directory).filePath("deck-assistant.png")),
+            "assistant review workflow screenshot"
+        );
+        click(*window, child(root, "deckAssistantClose"));
+        click(*window, child(root, "deckSettingsButton"));
+        require(
+            child(root, "deckSettingsDialog").property("visible").toBool(),
+            "settings stay reachable without the project menu"
+        );
+        require(
+            window->grabWindow().save(QDir(directory).filePath("deck-settings.png")),
+            "appearance language and model settings screenshot"
+        );
+        evaluate(child(root, "deckSettingsDialog"), "close()");
+        require(
+            card_draft_assistant_smoke::verify(QDir(directory).filePath("assistant-lifecycle")),
+            "assistant candidate and cancellation lifecycle"
+        );
+        const auto beforeAssistant =
+            cards.draft().value("composition").toMap().value("cards").toList().size();
+        require(
+            !evaluate(
+                 workspace,
+                 "appendAssistantCards([{title:'Moon',rules:'A satellite'}], 'stale-target')"
+            )
+                 .toBool(),
+            "stale assistant target cannot append cards"
+        );
+        require(
+            cards.draft().value("composition").toMap().value("cards").toList().size()
+                == beforeAssistant,
+            "stale candidate leaves saved draft intact"
+        );
+        require(
+            evaluate(
+                workspace,
+                "appendAssistantCards([{title:'Moon',rules:'A satellite'}], assistantIdentity())"
+            )
+                .toBool(),
+            "explicit candidate append uses CardKit save service"
+        );
+        require(
+            cards.draft().value("composition").toMap().value("cards").toList().size()
+                    == beforeAssistant + 1
+                && !cards.currentAccepted(),
+            "AI suggestions append a draft without accepting a version"
+        );
+        evaluate(workspace, "setCardField(\"rules\", \"Unfinished observation\")");
+        click(*window, child(root, "deckAppearanceButton"));
+        click(*window, child(root, "deckAppearanceDark"));
+        require(
+            preferences.appearanceMode() == 2 && preferences.dark(),
+            "toolbar appearance switch changes live preferences"
+        );
+        click(*window, child(root, "deckLanguageButton"));
+        click(*window, child(root, "deckChinese"));
+        require(
+            preferences.languageMode() == "zh_CN",
+            "toolbar language switch changes live preferences"
+        );
+        require(
+            evaluate(workspace, "currentCard.rules === 'Unfinished observation'").toBool(),
+            "unsaved card text survives live language and appearance changes"
+        );
+        evaluate(workspace, "flush()");
+        {
+            UiPreferences reopened(
+                *qobject_cast<QGuiApplication*>(QCoreApplication::instance()),
+                QDir(directory).filePath("deck.conf")
+            );
+            require(
+                reopened.appearanceMode() == 2 && reopened.dark()
+                    && reopened.languageMode() == "zh_CN",
+                "language and appearance persist across preferences reopening"
+            );
+        }
+        preferences.setLanguageMode("en");
+        preferences.setAppearanceMode(1);
         write(
             QDir(directory).filePath("report.json"),
             {{"status", "passed"},
@@ -796,6 +1059,13 @@ bool deck_native_smoke::verify(
              {"shape_debug_alias_follows_promotion", true},
              {"calm_workbench_interactions", true},
              {"application_icon_loaded", true},
+             {"monochrome_both_appearances", true},
+             {"toolbar_icon_contrast_both_appearances", true},
+             {"preferences_live_and_persisted", true},
+             {"fresh_profile_defaults_to_light", true},
+             {"integrated_titlebar_safe_at_980", true},
+             {"assistant_stale_candidate_fenced", true},
+             {"assistant_cancel_before_start_acknowledgement", true},
              {"workbench_screenshots", uiEvidence}}
         );
         qInfo().noquote() << "Deck native smoke passed:" << directory;

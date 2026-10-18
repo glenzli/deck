@@ -156,6 +156,7 @@ std::shared_ptr<const Document> prepare(const QJsonObject& plan) {
          {"name",
           "source",
           "options",
+          "imposition",
           "sheet_width_mm",
           "sheet_height_mm",
           "columns",

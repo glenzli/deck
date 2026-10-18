@@ -10,8 +10,9 @@ Button {
     property string accessibleName: toolTipText
     property bool primary: false
     property bool selected: false
-    property int buttonSize: Theme.compactControlHeight
-    property int iconSize: 17
+    property int buttonSize: Theme.iconButtonSize
+    property int iconSize: Theme.iconSize
+    property real iconRotation: 0
 
     implicitWidth: buttonSize
     implicitHeight: buttonSize
@@ -51,6 +52,7 @@ Button {
         anchors.centerIn: parent
         source: control.source
         size: control.iconSize
+        rotation: control.iconRotation
         opacity: control.enabled ? 1.0 : 0.34
         color: !control.enabled ? Theme.disabled
                                 : control.primary ? Theme.accentText
@@ -61,7 +63,7 @@ Button {
     ToolTip {
         id: toolTip
         parent: control
-        visible: control.hovered && !control.down && control.toolTipText.length > 0
+        visible: (control.hovered || control.visualFocus) && !control.down && control.toolTipText.length > 0
         delay: 450
         timeout: 3500
         text: control.toolTipText

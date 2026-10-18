@@ -1,13 +1,20 @@
 #include "card_print_controller.hpp"
+#include "deck_cli_client.hpp"
 #include "desktop_backend.hpp"
 #include <QBuffer>
 #include <QDebug>
 #include <QJsonDocument>
+#include <QRegularExpression>
+#include <QTemporaryFile>
 #include <QtConcurrent/QtConcurrentRun>
 #include <stdexcept>
 
-CardPrintController::CardPrintController(DesktopBackend& backend, QObject* parent)
-    : QObject(parent), backend_(backend) {
+CardPrintController::CardPrintController(
+    DesktopBackend& backend,
+    const DeckCliClient& cli,
+    QObject* parent
+)
+    : QObject(parent), backend_(backend), cli_(cli) {
     connect(&backend_, &DesktopBackend::projectChanged, this, [this] {
         if (project_id_ != backend_.projectId() || project_path_ != backend_.bundlePath())
             clear();
@@ -46,6 +53,7 @@ void CardPrintController::clear() {
     document_.reset();
     preview_.clear();
     error_.clear();
+    problem_card_id_.clear();
     page_index_ = 0;
     exported_pages_ = 0;
     emit documentChanged();
@@ -59,7 +67,11 @@ bool CardPrintController::fail(const char* message, const QString& detail) {
     emit statusChanged();
     return false;
 }
-bool CardPrintController::prepare(const QVariantMap& source, const QVariantMap& options) {
+bool CardPrintController::prepare(
+    const QVariantMap& source,
+    const QVariantMap& options,
+    const QVariantMap& imposition
+) {
     if (running_)
         return false;
     clear();
@@ -69,15 +81,21 @@ bool CardPrintController::prepare(const QVariantMap& source, const QVariantMap& 
         if (project_id_.isEmpty() || source.value("artifact_id").toString().isEmpty()
             || source.value("revision_id").toString().isEmpty())
             throw std::runtime_error("accepted kit required");
-        const QJsonObject request{
+        QJsonObject request{
             {"action", "print_plan"},
             {"source", QJsonObject::fromVariantMap(source)},
             {"options", QJsonObject::fromVariantMap(options)}
         };
-        const auto reply = backend_.cardKitAction(
-            QString::fromUtf8(QJsonDocument(request).toJson(QJsonDocument::Compact))
-        );
-        const auto plan = QJsonDocument::fromJson(reply.toUtf8()).object()["print_plan"].toObject();
+        if (!imposition.isEmpty())
+            request["imposition"] = QJsonObject::fromVariantMap(imposition);
+        QTemporaryFile input;
+        if (!input.open())
+            throw std::runtime_error("print request unavailable");
+        const auto bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
+        if (input.write(bytes) != bytes.size() || !input.flush())
+            throw std::runtime_error("print request write failed");
+        const auto plan =
+            cli_.run({"card-kit", project_path_, input.fileName()})["print_plan"].toObject();
         if (plan["source"].toObject() != QJsonObject::fromVariantMap(source))
             throw std::runtime_error("print source mismatch");
         document_ = card_print::prepare(plan);
@@ -92,6 +110,15 @@ bool CardPrintController::prepare(const QVariantMap& source, const QVariantMap& 
         document_.reset();
         emit documentChanged();
         const QString detail = QString::fromUtf8(e.what());
+        const auto problem =
+            QRegularExpression("card_print.text_overflow: card ([^ ]+)").match(detail);
+        if (problem.hasMatch())
+            problem_card_id_ = problem.captured(1);
+        if (detail.contains("deck.print.grid") || detail.contains("deck.print.card"))
+            return fail(
+                QT_TR_NOOP("Choose valid rows, columns and a card from this accepted version."),
+                detail
+            );
         if (detail.contains("card_render.cover_limit:"))
             return fail(
                 QT_TR_NOOP(

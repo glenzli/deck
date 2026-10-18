@@ -71,6 +71,11 @@ ColumnLayout {
         }
         onRejected: root.colorIdentity = ""
     }
+    CardLayoutPresets {
+        Layout.fillWidth: true
+        configuration: root.configuration
+        onChosen: configuration => { root.validationMessage = ""; root.edited(configuration) }
+    }
     Label { text: root.perCard ? qsTr("This card’s layout") : qsTr("Default layout"); color: Theme.text; font.weight: Font.DemiBold }
     ShapeComboBox {
         objectName: root.perCard ? "cardLayoutOverride" : "cardLayoutDefault"
@@ -80,7 +85,7 @@ ColumnLayout {
             return root.perCard || !root.configuration
                 ? [root.perCard ? qsTr("Use the set’s layout type") : qsTr("Original game-card layout")].concat(names) : names
         }
-        currentIndex: root.modeIndex()
+        selectedIndex: root.modeIndex()
         onActivated: index => root.chooseMode(index)
     }
     Label {
@@ -94,7 +99,7 @@ ColumnLayout {
         objectName: root.perCard ? "cardImageFitOverride" : "cardImageFitDefault"
         Layout.fillWidth: true
         model: [qsTr("Show the complete image"), qsTr("Fill the card · crop edges")]
-        currentIndex: root.value("image_fit", "contain") === "cover" ? 1 : 0
+        selectedIndex: root.value("image_fit", "contain") === "cover" ? 1 : 0
         onActivated: index => root.setValue("image_fit", index === 1 ? "cover" : "contain")
     }
     Label {
@@ -106,7 +111,7 @@ ColumnLayout {
     RowLayout {
         Layout.fillWidth: true
         Label { Layout.fillWidth: true; text: qsTr("Text size (%)"); color: Theme.muted }
-        SpinBox {
+        ShapeSpinBox {
             objectName: root.perCard ? "cardTextSizeOverride" : "cardTextSizeDefault"
             from: 50; to: 300; stepSize: 10; editable: true; value: root.value("text_scale_percent", 100)
             onValueModified: root.setValue("text_scale_percent", value)
@@ -158,7 +163,7 @@ ColumnLayout {
                 }
             }
         }
-        CheckBox {
+        ShapeCheckBox {
             objectName: root.perCard ? "cardBorderOverride" : "cardBorderDefault"
             text: qsTr("Show a border"); checked: root.value("border", false)
             onToggled: root.setValue("border", checked)
@@ -168,13 +173,13 @@ ColumnLayout {
             objectName: root.perCard ? "cardTextAlignOverride" : "cardTextAlignDefault"
             Layout.fillWidth: true
             model: [qsTr("Left"), qsTr("Center"), qsTr("Right")]
-            currentIndex: Math.max(0, ["left", "center", "right"].indexOf(root.value("text_align", "left")))
+            selectedIndex: Math.max(0, ["left", "center", "right"].indexOf(root.value("text_align", "left")))
             onActivated: index => root.setValue("text_align", ["left", "center", "right"][index])
         }
         RowLayout {
             Layout.fillWidth: true
             Label { Layout.fillWidth: true; text: qsTr("Inner space (%)"); color: Theme.muted; wrapMode: Text.WordWrap }
-            SpinBox {
+            ShapeSpinBox {
                 objectName: root.perCard ? "cardPaddingOverride" : "cardPaddingDefault"
                 from: 0; to: 20; value: Math.round(root.value("padding_percent", 4))
                 onValueModified: root.setValue("padding_percent", value)

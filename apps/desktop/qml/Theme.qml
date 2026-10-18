@@ -13,7 +13,7 @@ QtObject {
     }
 
     property int mode: Theme.AppearanceMode.System
-    property bool systemDark: true
+    property bool systemDark: false
     readonly property bool effectiveDark: mode === Theme.AppearanceMode.Dark
                                           || (mode === Theme.AppearanceMode.System
                                               && systemDark)
@@ -21,6 +21,9 @@ QtObject {
     // Stable desktop density shared with Shadow and Echo.
     readonly property int compactControlHeight: 30
     readonly property int controlHeight: 34
+    readonly property int iconButtonSize: 32
+    readonly property int iconSize: 20
+    readonly property int compactIconSize: 18
     readonly property int toolbarHeight: 44
     readonly property int compactControlRadius: 6
     readonly property int controlRadius: 8
@@ -47,72 +50,70 @@ QtObject {
     readonly property int radiusMedium: controlRadius
     readonly property int radiusLarge: panelRadius
 
-    // Base surfaces. Light mode stays cool grey-white instead of warm or
-    // yellow; depth comes from restrained contrast rather than boxed shadows.
-    readonly property color window: effectiveDark ? "#101214" : "#f1f3f5"
-    readonly property color chrome: effectiveDark ? "#141619" : "#fcfcfd"
-    readonly property color panel: effectiveDark ? "#181b1f" : "#f8f9fa"
-    readonly property color panelRaised: effectiveDark ? "#1e2227" : "#ffffff"
-    readonly property color panelInset: effectiveDark ? "#13171b" : "#eef1f4"
-    readonly property color canvas: effectiveDark ? "#15191d" : "#edf0f2"
-    readonly property color canvasGrid: effectiveDark ? "#262c32" : "#dfe4e9"
-    readonly property color surfaceSubtle: effectiveDark ? "#20252b" : "#f1f3f5"
-    readonly property color surfaceSelected: effectiveDark ? "#252d35" : "#e7edf3"
-    readonly property color control: effectiveDark ? "#1d2228" : "#ffffff"
-    readonly property color controlQuiet: effectiveDark ? "#20252b" : "#f3f5f7"
-    readonly property color controlPressed: effectiveDark ? "#2b323a" : "#e8edf1"
+    // Neutral surfaces let card artwork carry color in either appearance.
+    readonly property color window: effectiveDark ? "#111111" : "#f2f2f2"
+    readonly property color chrome: effectiveDark ? "#171717" : "#fafafa"
+    readonly property color panel: effectiveDark ? "#1c1c1c" : "#f7f7f7"
+    readonly property color panelRaised: effectiveDark ? "#242424" : "#ffffff"
+    readonly property color panelInset: effectiveDark ? "#141414" : "#eeeeee"
+    readonly property color canvas: effectiveDark ? "#121212" : "#e9e9e9"
+    readonly property color canvasGrid: effectiveDark ? "#2b2b2b" : "#dadada"
+    readonly property color surfaceSubtle: effectiveDark ? "#252525" : "#ededed"
+    readonly property color surfaceSelected: effectiveDark ? "#333333" : "#dfdfdf"
+    readonly property color control: effectiveDark ? "#222222" : "#ffffff"
+    readonly property color controlQuiet: effectiveDark ? "#252525" : "#f1f1f1"
+    readonly property color controlPressed: effectiveDark ? "#393939" : "#e2e2e2"
 
     readonly property color background: window
     readonly property color surface: panel
     readonly property color raised: panelRaised
-    readonly property color raisedHover: effectiveDark ? "#252b32" : "#f1f4f6"
+    readonly property color raisedHover: effectiveDark ? "#303030" : "#eeeeee"
     readonly property color selected: surfaceSelected
 
     // Structure.
-    readonly property color border: effectiveDark ? "#30363d" : "#e1e5e9"
-    readonly property color borderStrong: effectiveDark ? "#48515b" : "#c7d0d8"
-    readonly property color separatorStrong: effectiveDark ? "#404850" : "#bcc5cd"
+    readonly property color border: effectiveDark ? "#333333" : "#dddddd"
+    readonly property color borderStrong: effectiveDark ? "#505050" : "#bcbcbc"
+    readonly property color separatorStrong: effectiveDark ? "#494949" : "#b8b8b8"
 
     // Text and icons.
-    readonly property color textPrimary: effectiveDark ? "#f1f4f6" : "#20252a"
-    readonly property color textSecondary: effectiveDark ? "#cbd3d9" : "#4f5964"
-    readonly property color textMuted: effectiveDark ? "#98a4af" : "#68737e"
-    readonly property color textDisabled: effectiveDark ? "#6f7c88" : "#a3abb4"
-    readonly property color textPlaceholder: effectiveDark ? "#75818c" : "#7e8993"
+    readonly property color textPrimary: effectiveDark ? "#f4f4f4" : "#202020"
+    readonly property color textSecondary: effectiveDark ? "#cccccc" : "#505050"
+    readonly property color textMuted: effectiveDark ? "#a0a0a0" : "#6a6a6a"
+    readonly property color textDisabled: effectiveDark ? "#777777" : "#a0a0a0"
+    readonly property color textPlaceholder: effectiveDark ? "#8a8a8a" : "#808080"
 
     readonly property color text: textPrimary
     readonly property color textSoft: textSecondary
     readonly property color muted: textMuted
     readonly property color disabled: textDisabled
 
-    // Shape uses blue for authored or pending creative state. Accepted output
-    // remains a quieter green signal and does not compete with primary actions.
-    readonly property color accent: effectiveDark ? "#70a3d6" : "#3574b9"
-    readonly property color accentHover: effectiveDark ? "#82b2df" : "#2865a6"
-    readonly property color accentPressed: effectiveDark ? "#5d91c6" : "#285f9c"
-    readonly property color accentSoft: effectiveDark ? "#1d3246" : "#eaf2fa"
-    readonly property color accentSurfaceQuiet: effectiveDark ? "#192736" : "#f3f7fb"
-    readonly property color accentBorder: effectiveDark ? "#5e95c4" : "#91b4d8"
-    readonly property color accentText: "#ffffff"
-    readonly property color accentSelectionText: effectiveDark ? "#b9d6ee" : "#285f9c"
+    // Monochrome emphasis and selection; error color is reserved for failures.
+    readonly property color accent: effectiveDark ? "#ededed" : "#242424"
+    readonly property color accentHover: effectiveDark ? "#ffffff" : "#3d3d3d"
+    readonly property color accentPressed: effectiveDark ? "#c9c9c9" : "#101010"
+    readonly property color accentSoft: effectiveDark ? "#333333" : "#e5e5e5"
+    readonly property color accentSurfaceQuiet: effectiveDark ? "#282828" : "#f0f0f0"
+    readonly property color accentBorder: effectiveDark ? "#898989" : "#888888"
+    readonly property color accentText: effectiveDark ? "#181818" : "#ffffff"
+    readonly property color accentSelectionText: effectiveDark ? "#ffffff" : "#202020"
 
-    readonly property color success: effectiveDark ? "#7db68b" : "#3d7850"
-    readonly property color successSoft: effectiveDark ? "#1c3024" : "#e9f3ec"
-    readonly property color warning: effectiveDark ? "#c5a66a" : "#8a651d"
-    readonly property color warningSoft: effectiveDark ? "#352f22" : "#f8efd9"
-    readonly property color danger: effectiveDark ? "#d77f79" : "#a5413d"
-    readonly property color dangerSoft: effectiveDark ? "#3c2625" : "#f8e8e6"
+    readonly property color success: effectiveDark ? "#c7c7c7" : "#4b4b4b"
+    readonly property color successSoft: effectiveDark ? "#282828" : "#eeeeee"
+    readonly property color warning: effectiveDark ? "#cccccc" : "#555555"
+    readonly property color warningSoft: effectiveDark ? "#292929" : "#eaeaea"
+    readonly property color danger: effectiveDark ? "#e4aaaa" : "#a23b3b"
+    readonly property color dangerSoft: effectiveDark ? "#352727" : "#f5e8e8"
 
     // Controls and elevation. Shadows are reserved for floating palettes and
     // dialogs; connected workbench regions rely on separators.
-    readonly property color buttonSurface: effectiveDark ? "#252d36" : "#ffffff"
-    readonly property color buttonHoverSurface: effectiveDark ? "#303b47" : "#f3f6f8"
-    readonly property color buttonPressedSurface: effectiveDark ? "#3b4856" : "#e9edf2"
-    readonly property color buttonGhostHover: effectiveDark ? "#252f39" : "#eef2f5"
-    readonly property color buttonGhostPressed: effectiveDark ? "#303c48" : "#e5eaef"
-    readonly property color buttonBorder: effectiveDark ? "#53616e" : "#d1d8e0"
-    readonly property color focusRing: effectiveDark ? "#76a6d4" : "#5a91cb"
-    readonly property color shadow: effectiveDark ? "#66000000" : "#22131b24"
-    readonly property color shadowSoft: effectiveDark ? "#44000000" : "#1618202a"
+    readonly property color buttonSurface: effectiveDark ? "#292929" : "#ffffff"
+    readonly property color buttonHoverSurface: effectiveDark ? "#353535" : "#eeeeee"
+    readonly property color buttonPressedSurface: effectiveDark ? "#434343" : "#dfdfdf"
+    readonly property color buttonGhostHover: effectiveDark ? "#2d2d2d" : "#e9e9e9"
+    readonly property color buttonGhostPressed: effectiveDark ? "#3b3b3b" : "#dcdcdc"
+    readonly property color buttonBorder: effectiveDark ? "#535353" : "#cbcbcb"
+    readonly property color focusRing: effectiveDark ? "#c5c5c5" : "#515151"
+    readonly property color shadow: effectiveDark ? "#66000000" : "#22000000"
+    readonly property color shadowSoft: effectiveDark ? "#44000000" : "#16000000"
     readonly property color transparent: "#00000000"
 }

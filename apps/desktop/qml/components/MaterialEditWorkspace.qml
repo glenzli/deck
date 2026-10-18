@@ -109,7 +109,7 @@ Item {
             text: qsTr("The original has a newer version. Refresh the input explicitly before continuing.")
             color: Theme.accent; wrapMode: Text.Wrap
         }
-        CheckBox {
+        ShapeCheckBox {
             id: pcm24Conversion
             objectName: "materialPcm24Conversion"
             visible: !workspace.imageMode

@@ -286,6 +286,7 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "image",
+ "infer-runtime-client",
  "rustix",
  "serde",
  "serde_json",
@@ -293,6 +294,7 @@ dependencies = [
  "shape-desktop-bridge",
  "shape-domain",
  "shape-execution",
+ "tokio",
  "uuid",
 ]
 

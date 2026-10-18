@@ -1,6 +1,108 @@
 <?xml version='1.0' encoding='utf-8'?>
 <TS version="2.1" language="zh_CN">
     <context>
+        <name>CardDraftAssistant</name>
+        <message>
+            <source>Connect Deck's own Infer Runtime access in Settings, then try again.</source>
+            <translation>请先在设置中连接 Deck 自己的 Infer Runtime 访问凭据，然后重试。</translation>
+        </message>
+        <message>
+            <source>The model returned an invalid card list. Try fewer cards or a clearer brief.</source>
+            <translation>模型返回的卡牌清单格式无效，请减少数量或更清楚地描述需求后重试。</translation>
+        </message>
+        <message>
+            <source>Generation cancelled.</source>
+            <translation>已取消生成。</translation>
+        </message>
+        <message>
+            <source>Stopped waiting. The model may still be finishing this request.</source>
+            <translation>已停止等待，模型可能仍在处理此请求。</translation>
+        </message>
+        <message>
+            <source>Enter a short description and choose between 1 and 16 cards.</source>
+            <translation>请输入简短说明，并选择 1 至 16 张卡牌。</translation>
+        </message>
+        <message>
+            <source>Infer Runtime could not complete this request. Check the connection and try again.</source>
+            <translation>Infer Runtime 未能完成此请求，请检查连接后重试。</translation>
+        </message>
+        <message>
+            <source>Cancelling…</source>
+            <translation>正在取消…</translation>
+        </message>
+        <message>
+            <source>Generating cards locally…</source>
+            <translation>正在本地生成卡牌…</translation>
+        </message>
+        <message>
+            <source>Checking connection…</source>
+            <translation>正在检查连接…</translation>
+        </message>
+        <message>
+            <source>Infer Runtime connected</source>
+            <translation>Infer Runtime 已连接</translation>
+        </message>
+        <message>
+            <source>Local text generation via Infer Runtime</source>
+            <translation>通过 Infer Runtime 在本地生成文案</translation>
+        </message>
+    </context>
+    <context>
+        <name>CardDraftDialog</name>
+        <message>
+            <source>Create cards with AI</source>
+            <translation>用 AI 创建卡牌</translation>
+        </message>
+        <message>
+            <source>Describe your topic, audience and card format. Review the suggestions before adding them to this set.</source>
+            <translation>描述主题、使用对象和卡牌形式。先检查建议内容，再添加到当前卡组。</translation>
+        </message>
+        <message>
+            <source>For example: six vocabulary cards about the seasons for a seven-year-old…</source>
+            <translation>例如：为七岁孩子制作六张关于四季的词语卡片…</translation>
+        </message>
+        <message>
+            <source>Cards</source>
+            <translation>卡片</translation>
+        </message>
+        <message>
+            <source>Generate again</source>
+            <translation>重新生成</translation>
+        </message>
+        <message>
+            <source>Generate cards</source>
+            <translation>生成卡牌</translation>
+        </message>
+        <message>
+            <source>Model connection</source>
+            <translation>模型连接</translation>
+        </message>
+        <message>
+            <source>Suggestions appear here. Your existing cards stay as they are.</source>
+            <translation>生成的建议会显示在这里，已有卡牌保持不变。</translation>
+        </message>
+        <message>
+            <source>The card set changed. Generate again for the current draft.</source>
+            <translation>卡组已变化，请根据当前草稿重新生成。</translation>
+        </message>
+        <message>
+            <source>Cancel generation</source>
+            <translation>取消生成</translation>
+        </message>
+        <message>
+            <source>Back to cards</source>
+            <translation>返回卡牌</translation>
+        </message>
+        <message>
+            <source>Add %1 cards</source>
+            <translation>添加 %1 张卡牌</translation>
+        </message>
+        <message>
+            <source>Add 1 card</source>
+            <translation>添加 1 张卡牌</translation>
+        </message>
+    </context>
+    <context>
         <name>CardImageIntakeDialog</name>
         <message>
             <source>Add existing card images</source>
@@ -301,6 +403,10 @@
             <translation>请先为整套卡牌选择通用默认版式，再修改单张卡牌的版式。</translation>
         </message>
         <message>
+            <source>The card set changed. Generate again for the current draft.</source>
+            <translation>卡组已变化，请根据当前草稿重新生成。</translation>
+        </message>
+        <message>
             <source>Paste at least one card title or text to begin.</source>
             <translation>请先粘贴至少一张卡牌的标题或正文。</translation>
         </message>
@@ -405,10 +511,6 @@
             <translation>卡片</translation>
         </message>
         <message>
-            <source>+ Add</source>
-            <translation>＋ 添加</translation>
-        </message>
-        <message>
             <source>Add cards</source>
             <translation>添加卡片</translation>
         </message>
@@ -421,12 +523,28 @@
             <translation>这套共 %1 份</translation>
         </message>
         <message>
+            <source>Create with AI…</source>
+            <translation>用 AI 创作…</translation>
+        </message>
+        <message>
             <source>Your card</source>
             <translation>你的卡片</translation>
         </message>
         <message>
             <source>Card %1 of %2</source>
             <translation>第 %1 张，共 %2 张</translation>
+        </message>
+        <message>
+            <source>Move card up</source>
+            <translation>上移卡牌</translation>
+        </message>
+        <message>
+            <source>Move card down</source>
+            <translation>下移卡牌</translation>
+        </message>
+        <message>
+            <source>Duplicate card</source>
+            <translation>复制卡牌</translation>
         </message>
         <message>
             <source>Enlarge</source>
@@ -499,6 +617,10 @@
         <message>
             <source>Blank card</source>
             <translation>空白卡</translation>
+        </message>
+        <message>
+            <source>Create cards with AI…</source>
+            <translation>用 AI 创建卡牌…</translation>
         </message>
         <message>
             <source>Move up</source>
@@ -817,6 +939,45 @@
         </message>
     </context>
     <context>
+        <name>CardLayoutPresets</name>
+        <message>
+            <source>Focus</source>
+            <translation>重点卡</translation>
+        </message>
+        <message>
+            <source>Study notes</source>
+            <translation>笔记卡</translation>
+        </message>
+        <message>
+            <source>Quote</source>
+            <translation>摘录卡</translation>
+        </message>
+        <message>
+            <source>Full picture</source>
+            <translation>完整图片</translation>
+        </message>
+        <message>
+            <source>Photo crop</source>
+            <translation>满版照片</translation>
+        </message>
+        <message>
+            <source>Picture &amp; note</source>
+            <translation>图文卡</translation>
+        </message>
+        <message>
+            <source>Framed picture</source>
+            <translation>留白图文</translation>
+        </message>
+        <message>
+            <source>Game card</source>
+            <translation>游戏卡</translation>
+        </message>
+        <message>
+            <source>Layout presets</source>
+            <translation>卡面预设</translation>
+        </message>
+    </context>
+    <context>
         <name>CardPrintController</name>
         <message>
             <source>Could not export PDF. Choose a new file outside the project and try again.</source>
@@ -829,6 +990,10 @@
         <message>
             <source>Exported %1 pages. Print at 100% or Actual size.</source>
             <translation>已导出 %1 页，请按 100% 或原始尺寸打印。</translation>
+        </message>
+        <message>
+            <source>Choose valid rows, columns and a card from this accepted version.</source>
+            <translation>请选择有效的行列数，以及当前已采用版本中的卡片。</translation>
         </message>
         <message>
             <source>An image is too narrow or wide for edge cropping. Go back to cards and choose Show the complete image, or use artwork with more suitable proportions.</source>
@@ -882,10 +1047,6 @@
     <context>
         <name>CardPrintDialog</name>
         <message>
-            <source>Print card layout</source>
-            <translation>卡牌打印排版</translation>
-        </message>
-        <message>
             <source>Export card print PDF</source>
             <translation>导出卡牌打印 PDF</translation>
         </message>
@@ -894,12 +1055,8 @@
             <translation>PDF 文档 (*.pdf)</translation>
         </message>
         <message>
-            <source>%1 · %2 copies · %3 pages · %4 cards per full page</source>
-            <translation>%1 · 共 %2 张 · %3 页 · 满页 %4 张</translation>
-        </message>
-        <message>
-            <source>Choose a layout for the accepted card version.</source>
-            <translation>为已采用的卡牌版本选择打印排版。</translation>
+            <source>Print &amp; arrange</source>
+            <translation>打印与拼版</translation>
         </message>
         <message>
             <source>Paper</source>
@@ -912,6 +1069,58 @@
         <message>
             <source>US Letter · 8.5 × 11 in</source>
             <translation>US Letter · 8.5 × 11 英寸</translation>
+        </message>
+        <message>
+            <source>Cards on the sheet</source>
+            <translation>打印内容</translation>
+        </message>
+        <message>
+            <source>Mix cards · use their quantities</source>
+            <translation>多卡混排 · 按各自份数</translation>
+        </message>
+        <message>
+            <source>Mix cards · one of each</source>
+            <translation>多卡混排 · 每种一张</translation>
+        </message>
+        <message>
+            <source>Repeat one card</source>
+            <translation>单卡重复</translation>
+        </message>
+        <message>
+            <source>Fill one sheet</source>
+            <translation>铺满一张纸</translation>
+        </message>
+        <message>
+            <source>Quick arrangement</source>
+            <translation>快捷拼版</translation>
+        </message>
+        <message>
+            <source>Columns</source>
+            <translation>列数</translation>
+        </message>
+        <message>
+            <source>Rows</source>
+            <translation>行数</translation>
+        </message>
+        <message>
+            <source>Cards fit proportionally inside this grid.</source>
+            <translation>自动按卡面比例适配所选行列。</translation>
+        </message>
+        <message>
+            <source>Using a fixed card size; the sheet fills automatically.</source>
+            <translation>使用固定卡片尺寸，自动计算每页张数。</translation>
+        </message>
+        <message>
+            <source>Use a fixed card size</source>
+            <translation>按固定卡片尺寸排版</translation>
+        </message>
+        <message>
+            <source>Hide fine adjustments</source>
+            <translation>收起详细设置</translation>
+        </message>
+        <message>
+            <source>Fine adjustments…</source>
+            <translation>详细设置…</translation>
         </message>
         <message>
             <source>Keep the card proportions</source>
@@ -950,28 +1159,48 @@
             <translation>裁切线位于成品卡牌之外。若较长的裁切线放不下，请增大卡牌间隙。</translation>
         </message>
         <message>
-            <source>Adjust the layout to see the paper preview.</source>
-            <translation>调整排版后可查看整张纸的预览。</translation>
+            <source>Sheet preview</source>
+            <translation>整页预览</translation>
+        </message>
+        <message>
+            <source>%1 × %2 mm per card</source>
+            <translation>每张 %1 × %2 毫米</translation>
+        </message>
+        <message>
+            <source>Layout guide</source>
+            <translation>拼版示意</translation>
+        </message>
+        <message>
+            <source>%1 cards / sheet · %2 copies · %3 pages</source>
+            <translation>每页 %1 张 · 共 %2 张 · %3 页</translation>
+        </message>
+        <message>
+            <source>Fix the card content to preview and export.</source>
+            <translation>请先修改卡片内容，再预览和导出。</translation>
+        </message>
+        <message>
+            <source>Card: %1</source>
+            <translation>卡片：%1</translation>
+        </message>
+        <message>
+            <source>Edit this card</source>
+            <translation>修改这张卡</translation>
         </message>
         <message>
             <source>Previous page</source>
             <translation>上一页</translation>
         </message>
         <message>
-            <source>Page %1 of %2</source>
-            <translation>第 %1 页，共 %2 页</translation>
-        </message>
-        <message>
             <source>Next page</source>
             <translation>下一页</translation>
         </message>
         <message>
-            <source>Print the PDF at 100% or Actual size. Turn off Fit to page. This layout is for single-sided printing.</source>
-            <translation>请按 100% 或原始尺寸打印 PDF，关闭“适应页面”。此排版用于单面打印。</translation>
-        </message>
-        <message>
             <source>Back to cards</source>
             <translation>返回卡牌</translation>
+        </message>
+        <message>
+            <source>Crop marks included · print at 100% / Actual size.</source>
+            <translation>已含裁切线 · 请按 100% 或原始尺寸打印。</translation>
         </message>
         <message>
             <source>Exporting…</source>
@@ -980,6 +1209,13 @@
         <message>
             <source>Export print PDF…</source>
             <translation>导出打印 PDF…</translation>
+        </message>
+    </context>
+    <context>
+        <name>CardSheetPresets</name>
+        <message>
+            <source>%1 columns × %2 rows</source>
+            <translation>%1 列 × %2 行</translation>
         </message>
     </context>
     <context>
@@ -1065,6 +1301,10 @@
         <message>
             <source>Card set</source>
             <translation>卡组</translation>
+        </message>
+        <message>
+            <source>Settings</source>
+            <translation>设置</translation>
         </message>
         <message>
             <source>Not saved</source>
@@ -1259,6 +1499,30 @@
             <translation>深色</translation>
         </message>
         <message>
+            <source>Card text · Infer Runtime</source>
+            <translation>卡牌文案 · Infer Runtime</translation>
+        </message>
+        <message>
+            <source>Generate card text with local models. Deck uses its own access; requests stay local with no cloud fallback.</source>
+            <translation>使用本地模型生成卡牌文案。Deck 使用独立访问身份，请求只在本地执行。</translation>
+        </message>
+        <message>
+            <source>Deck credential selected</source>
+            <translation>已选择 Deck 的访问凭据</translation>
+        </message>
+        <message>
+            <source>Connect a Deck credential from Infer Runtime Apps &amp; Access.</source>
+            <translation>请连接 Infer Runtime“应用与访问”中为 Deck 创建的凭据。</translation>
+        </message>
+        <message>
+            <source>Connect access…</source>
+            <translation>连接访问凭据…</translation>
+        </message>
+        <message>
+            <source>Check connection</source>
+            <translation>检查连接</translation>
+        </message>
+        <message>
             <source>Choose Shape to create images. Model and generation access are configured in Shape.</source>
             <translation>选择 Shape 来生成图片；模型和生成服务请在 Shape 中配置。</translation>
         </message>
@@ -1285,6 +1549,10 @@
         <message>
             <source>Choose Shape application or executable</source>
             <translation>选择 Shape 应用或可执行文件</translation>
+        </message>
+        <message>
+            <source>Choose Deck's Infer Runtime credential file</source>
+            <translation>选择 Deck 的 Infer Runtime 凭据文件</translation>
         </message>
         <message>
             <source>Choose Shadow application or executable</source>

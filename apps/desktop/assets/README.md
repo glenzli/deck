@@ -1,6 +1,7 @@
 # Deck application icon
 
-The current balanced flat mark was created with **built-in imagegen** on 2026-10-18.
+The current balanced flat mark was created with **built-in imagegen** on 2026-10-18,
+then normalized with **Icon Forge** on the same date.
 `app-icon-source.png` is preserved byte-for-byte from
 `exec-521ed80d-7398-4030-b005-3eff81d5fc5f.png`.
 
@@ -26,24 +27,37 @@ No text, suits, marks, borders, new symbols, or outer rounded tile. The square b
 
 ## Mechanical outputs
 
-`app-icon.png` is 1024×1024. `app-icon.icns` contains the standard macOS 16, 32, 64, 128,
-256, 512 and 1024 pixel representations, including the paired Retina entries.
-Both derive directly from the opaque RGB original, reusing the established native black-background
-presentation. No repainting, cropping, filtering, masking or background removal is applied.
-No Windows binary or ICO is claimed.
+`app-icon.png` is Icon Forge's 1024×1024 RGBA rounded mother image. Its default geometry places
+the original artwork in a centered 824×824 tile with a 186 px corner radius and 100 px of
+transparent space on each side. The intended black background stays inside the tile; AI
+background removal is skipped. The source artwork remains byte-identical.
 
-From this asset directory on macOS, reproduce the outputs with:
+`app-icon.icns` is generated from that same mother image and contains the standard macOS 16,
+32, 64, 128, 256, 512 and 1024 pixel representations, including paired Retina entries.
+Qt window branding and the macOS bundle therefore use the same rounded artwork and padding.
+Only these PNG/ICNS outputs are used by Deck; the tool's other platform outputs are temporary
+conversion products, not evidence of Deck builds for those platforms.
+
+- Icon Forge source: `https://github.com/glenzli/icon-forge`, revision
+  `e9cd09e88e65390018b59921441843ec80ad3ca2`
+- Locked conversion tools: `sharp@0.33.5`, `@tauri-apps/cli@2.11.2`
+- PNG SHA-256: `e855513c31b52d12fcff82cc3e9e0a71f4002dfa240c296f53828354c6a62484`
+- ICNS SHA-256: `c26e8dc5803d03e3d88d3960668393d8acf6f8846daea12b7cfddc4510d8d400`
+
+From the Deck repository root, set `ICON_FORGE_ROOT` to a checkout of that revision with its
+locked Node.js dependencies installed, then reproduce the outputs with:
 
 ```sh
-sips --resampleHeightWidth 1024 1024 app-icon-source.png --out app-icon.png
-ICON_WORK=$(mktemp -d)
-mkdir "$ICON_WORK/app-icon.iconset"
-for ICON_ENTRY in 16x16:16 16x16@2x:32 32x32:32 32x32@2x:64 128x128:128 128x128@2x:256 256x256:256 256x256@2x:512 512x512:512 512x512@2x:1024; do
-    ICON_LABEL=${ICON_ENTRY%:*}
-    ICON_SIZE=${ICON_ENTRY#*:}
-    sips --resampleHeightWidth "$ICON_SIZE" "$ICON_SIZE" app-icon.png --out "$ICON_WORK/app-icon.iconset/icon_$ICON_LABEL.png"
-done
-iconutil --convert icns "$ICON_WORK/app-icon.iconset" --output app-icon.icns
+DECK_ROOT="$PWD"
+DECK_ICON_OUTPUT=$(mktemp -d)
+(
+    cd "$ICON_FORGE_ROOT"
+    node forge.js --input "$DECK_ROOT/apps/desktop/assets/app-icon-source.png" \
+        --output "$DECK_ICON_OUTPUT" --skip-rembg
+)
+cp "$DECK_ICON_OUTPUT/rounded-source.png" apps/desktop/assets/app-icon.png
+cp "$DECK_ICON_OUTPUT/tauri/icon.icns" apps/desktop/assets/app-icon.icns
 ```
 
-The temporary iconset stays outside the repository. These commands never regenerate the original.
+Temporary conversion products stay outside the repository. These commands never regenerate the
+original artwork, and Deck builds use the checked-in outputs without requiring Icon Forge.

@@ -5,6 +5,13 @@ import Shape.Desktop
 
 ComboBox {
     id: control
+    // Keep the caller's semantic selection when translated labels rebuild the model.
+    property int selectedIndex: 0
+    function restoreSelection() { currentIndex = count > 0 ? Math.max(0, Math.min(selectedIndex, count - 1)) : -1 }
+    onSelectedIndexChanged: restoreSelection()
+    onModelChanged: Qt.callLater(control.restoreSelection)
+    onCountChanged: Qt.callLater(control.restoreSelection)
+    Component.onCompleted: restoreSelection()
     implicitHeight: Theme.controlHeight
     implicitWidth: 160
     font.pixelSize: Theme.fontBody

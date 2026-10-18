@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
+import QtQuick.Window
 import Shape.Desktop
 
 ApplicationWindow {
@@ -16,13 +17,16 @@ ApplicationWindow {
     required property DeckDocumentController documents
     required property DeckExchangeController exchange
     required property ExternalImageTaskController imageTask
+    required property CardDraftAssistant assistant
     property string initialProject: ""
     property string initialKit: ""
     property bool smokeMode: false
+    property bool closeAfterAssistant: false
     width: 1280; height: 840
     minimumWidth: 980; minimumHeight: 680
     visible: true
-    title: backend.projectOpen ? backend.projectName + " — Deck" : "Deck"
+    title: Qt.platform.os === "osx" ? "" : backend.projectOpen ? backend.projectName + " — Deck" : "Deck"
+    flags: Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
     color: Theme.window
     palette.window: Theme.window; palette.windowText: Theme.text; palette.text: Theme.text
     palette.button: Theme.buttonSurface; palette.buttonText: Theme.text
@@ -44,67 +48,130 @@ ApplicationWindow {
     Connections { target: window.preferences; function onDarkChanged() { Theme.systemDark = window.preferences.dark } }
     Connections { target: window.exchange; function onCompleted() { window.close() } }
     onClosing: close => {
+        if (assistant.running) { closeAfterAssistant = true; assistant.discard(); close.accepted = false; return }
         if (cardPrint.running || !cards.flush()) { close.accepted = false; return }
         if (exchange.active && !exchange.cancel()) close.accepted = false
     }
+    Connections { target: window.assistant; function onChanged() { if (window.closeAfterAssistant && !window.assistant.busy) window.close() } }
+    Shortcut { sequence: StandardKey.Open; enabled: !window.exchange.active; onActivated: window.showProjects() }
+    Shortcut { sequence: StandardKey.New; enabled: !window.exchange.active; onActivated: if (cards.flush()) { newName.text = ""; newProjectDialog.open() } }
+    Shortcut { sequence: StandardKey.Print; enabled: window.backend.projectOpen && !window.cardPrint.running; onActivated: cards.acceptAndPrint() }
+    Shortcut { sequence: "Ctrl+,"; onActivated: settingsDialog.open() }
     header: ToolBar {
-        implicitHeight: 66
-        background: Rectangle { color: Theme.chrome; Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.border } }
-        contentItem: RowLayout {
-            spacing: 12
-            Item { implicitWidth: 12 }
-            Label { text: "Deck"; font.pixelSize: 20; font.weight: Font.DemiBold; color: Theme.text }
-            Rectangle { implicitWidth: 1; implicitHeight: 24; color: Theme.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
-            ToolButton {
-                id: projectButton
-                objectName: "deckProjectMenuButton"
-                Layout.preferredWidth: Math.min(310, window.width * 0.28)
-                implicitHeight: 48; leftPadding: 8; rightPadding: 8
-                Accessible.name: qsTr("Project menu")
-                contentItem: RowLayout {
-                    ColumnLayout {
-                        Layout.fillWidth: true; spacing: 3
-                        Label { Layout.fillWidth: true; text: window.backend.projectOpen ? window.backend.projectName : qsTr("Cards, your way"); color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold; elide: Text.ElideRight }
-                        Label { Layout.fillWidth: true; visible: window.backend.projectOpen; text: cards.composition.name || qsTr("Card set"); color: Theme.muted; font.pixelSize: 11; elide: Text.ElideRight }
-                    }
-                    Label { text: "⌄"; color: Theme.muted; font.pixelSize: 16 }
-                }
-                background: Rectangle { radius: 8; color: projectButton.hovered ? Theme.surfaceSubtle : "transparent" }
-                onClicked: projectMenu.popup(projectButton, 0, projectButton.height)
-            }
-            Item { Layout.fillWidth: true }
-            Label {
-                objectName: "deckSaveStatus"
-                visible: window.backend.projectOpen
-                text: cards.dirty ? (window.cardKit.error.length ? qsTr("Not saved") : qsTr("Saving…")) : window.cardKit.currentAccepted ? qsTr("Version saved") : qsTr("Draft saved")
-                color: window.cardKit.error.length ? Theme.danger : Theme.muted; font.pixelSize: 11
-            }
-            ShapeButton {
-                objectName: "cardKitPrint"
-                visible: window.backend.projectOpen
-                text: !cards.dirty && window.cardKit.currentAccepted ? qsTr("Print…") : qsTr("Accept & print…")
-                primary: true; enabled: !window.cardPrint.running
-                onClicked: cards.acceptAndPrint()
-            }
-            ToolButton {
-                id: moreButton
-                objectName: "deckMoreMenuButton"
-                implicitWidth: 34; implicitHeight: 34; text: "⋯"; font.pixelSize: 24
-                Accessible.name: qsTr("More actions")
-                enabled: window.backend.projectOpen
-                background: Rectangle { radius: 8; color: moreButton.hovered ? Theme.surfaceSubtle : "transparent" }
-                onClicked: moreMenu.popup(moreButton, moreButton.width - moreMenu.width, moreButton.height)
-            }
-            Item { implicitWidth: 14 }
+        id: titleBar
+        objectName: "titleToolBar"
+        implicitHeight: 56
+        topPadding: 0; bottomPadding: 0
+        leftPadding: Math.max(SafeArea.margins.left, Qt.platform.os === "osx" && window.visibility !== Window.FullScreen ? 96 : 16)
+        rightPadding: Math.max(SafeArea.margins.right, Qt.platform.os === "windows" ? 152 : 16)
+        background: Rectangle {
+            color: Theme.chrome
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.border }
         }
+        contentItem: Item {
+            RowLayout {
+                anchors.fill: parent
+                spacing: 12
+                Label {
+                    text: "Deck"; font.pixelSize: 20; font.weight: Font.DemiBold; color: Theme.text
+                    DragHandler {
+                        target: null
+                        acceptedButtons: Qt.LeftButton
+                        onActiveChanged: if (active) window.startSystemMove()
+                    }
+                }
+                Rectangle { implicitWidth: 1; implicitHeight: 24; color: Theme.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
+                ToolButton {
+                    id: projectButton
+                    objectName: "deckProjectMenuButton"
+                    Layout.minimumWidth: 140
+                    Layout.preferredWidth: Math.min(310, window.width * 0.24)
+                    implicitHeight: 48; leftPadding: 8; rightPadding: 8
+                    Accessible.name: qsTr("Project menu")
+                    contentItem: RowLayout {
+                        ColumnLayout {
+                            Layout.fillWidth: true; spacing: 3
+                            Label { Layout.fillWidth: true; text: window.backend.projectOpen ? window.backend.projectName : qsTr("Cards, your way"); color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold; elide: Text.ElideRight }
+                            Label { Layout.fillWidth: true; visible: window.backend.projectOpen; text: cards.composition.name || qsTr("Card set"); color: Theme.muted; font.pixelSize: 11; elide: Text.ElideRight }
+                        }
+                        ShapeIcon { source: "qrc:/qt/qml/Shape/Desktop/icons/chevron-down.svg"; size: Theme.compactIconSize }
+                    }
+                    background: Rectangle { radius: 8; color: projectButton.hovered ? Theme.surfaceSubtle : "transparent" }
+                    onClicked: projectMenu.popup(projectButton, 0, projectButton.height)
+                }
+                Item {
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    DragHandler {
+                        target: null
+                        acceptedButtons: Qt.LeftButton
+                        onActiveChanged: if (active) window.startSystemMove()
+                    }
+                }
+                ShapeIconButton {
+                    id: languageButton
+                    objectName: "deckLanguageButton"
+                    source: "qrc:/qt/qml/Shape/Desktop/icons/language.svg"
+                    toolTipText: qsTr("Language")
+                    onClicked: languageMenu.popup(languageButton, 0, languageButton.height)
+                }
+                ShapeIconButton {
+                    id: appearanceButton
+                    objectName: "deckAppearanceButton"
+                    source: window.preferences.dark ? "qrc:/qt/qml/Shape/Desktop/icons/moon.svg" : "qrc:/qt/qml/Shape/Desktop/icons/sun.svg"
+                    toolTipText: qsTr("Appearance")
+                    onClicked: appearanceMenu.popup(appearanceButton, 0, appearanceButton.height)
+                }
+                ShapeIconButton {
+                    objectName: "deckSettingsButton"
+                    source: "qrc:/qt/qml/Shape/Desktop/icons/settings.svg"
+                    toolTipText: qsTr("Settings")
+                    onClicked: settingsDialog.open()
+                }
+                Rectangle { visible: window.backend.projectOpen; implicitWidth: 1; implicitHeight: 22; color: Theme.border }
+                Label {
+                    objectName: "deckSaveStatus"
+                    visible: window.backend.projectOpen
+                    text: cards.dirty ? (window.cardKit.error.length ? qsTr("Not saved") : qsTr("Saving…")) : window.cardKit.currentAccepted ? qsTr("Version saved") : qsTr("Draft saved")
+                    color: window.cardKit.error.length ? Theme.danger : Theme.muted; font.pixelSize: 11
+                }
+                ShapeButton {
+                    objectName: "cardKitPrint"
+                    visible: window.backend.projectOpen
+                    text: !cards.dirty && window.cardKit.currentAccepted ? qsTr("Print…") : qsTr("Accept & print…")
+                    primary: true; enabled: !window.cardPrint.running
+                    iconSource: "qrc:/qt/qml/Shape/Desktop/icons/print.svg"
+                    onClicked: cards.acceptAndPrint()
+                }
+                ShapeIconButton {
+                    id: moreButton
+                    objectName: "deckMoreMenuButton"
+                    source: "qrc:/qt/qml/Shape/Desktop/icons/more.svg"
+                    toolTipText: qsTr("More actions")
+                    enabled: window.backend.projectOpen
+                    onClicked: moreMenu.popup(moreButton, moreButton.width - moreMenu.width, moreButton.height)
+                }
+            }
+        }
+    }
+    Menu {
+        id: languageMenu; objectName: "deckLanguageMenu"; popupType: Popup.Item
+        MenuItem { text: qsTr("Follow system"); checkable: true; checked: window.preferences.languageMode === "system"; onTriggered: window.preferences.languageMode = "system" }
+        MenuItem { objectName: "deckEnglish"; text: "English"; checkable: true; checked: window.preferences.languageMode === "en"; onTriggered: window.preferences.languageMode = "en" }
+        MenuItem { objectName: "deckChinese"; text: "简体中文"; checkable: true; checked: window.preferences.languageMode === "zh_CN"; onTriggered: window.preferences.languageMode = "zh_CN" }
+    }
+    Menu {
+        id: appearanceMenu; objectName: "deckAppearanceMenu"; popupType: Popup.Item
+        MenuItem { objectName: "deckAppearanceSystem"; text: qsTr("Follow system"); icon.source: "qrc:/qt/qml/Shape/Desktop/icons/monitor.svg"; icon.color: Theme.text; checkable: true; checked: window.preferences.appearanceMode === 0; onTriggered: window.preferences.appearanceMode = 0 }
+        MenuItem { objectName: "deckAppearanceLight"; text: qsTr("Light"); icon.source: "qrc:/qt/qml/Shape/Desktop/icons/sun.svg"; icon.color: Theme.text; checkable: true; checked: window.preferences.appearanceMode === 1; onTriggered: window.preferences.appearanceMode = 1 }
+        MenuItem { objectName: "deckAppearanceDark"; text: qsTr("Dark"); icon.source: "qrc:/qt/qml/Shape/Desktop/icons/moon.svg"; icon.color: Theme.text; checkable: true; checked: window.preferences.appearanceMode === 2; onTriggered: window.preferences.appearanceMode = 2 }
     }
     Menu {
         popupType: Popup.Item
         id: projectMenu; objectName: "deckProjectMenu"
-        MenuItem { objectName: "deckNewProject"; text: qsTr("New project…"); enabled: !window.exchange.active; onTriggered: { if (cards.flush()) { newName.text = ""; newProjectDialog.open() } } }
-        MenuItem { objectName: "deckOpenProject"; text: qsTr("Open project…"); enabled: !window.exchange.active; onTriggered: window.showProjects() }
+        MenuItem { objectName: "deckNewProject"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/add.svg"; icon.color: Theme.text; text: qsTr("New project…"); enabled: !window.exchange.active; onTriggered: { if (cards.flush()) { newName.text = ""; newProjectDialog.open() } } }
+        MenuItem { objectName: "deckOpenProject"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/open.svg"; icon.color: Theme.text; text: qsTr("Open project…"); enabled: !window.exchange.active; onTriggered: window.showProjects() }
         MenuSeparator {}
-        MenuItem { objectName: "cardKitNew"; text: qsTr("New card set"); enabled: window.backend.projectOpen; onTriggered: cards.newKit() }
+        MenuItem { objectName: "cardKitNew"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/add.svg"; icon.color: Theme.text; text: qsTr("New card set"); enabled: window.backend.projectOpen; onTriggered: cards.newKit() }
         Menu {
         popupType: Popup.Item
             id: setsMenu; title: qsTr("Switch card set"); enabled: window.backend.projectOpen && cards.savedKits.length > 1
@@ -117,18 +184,18 @@ ApplicationWindow {
         }
         MenuItem { text: qsTr("Card set name & defaults…"); enabled: window.backend.projectOpen; onTriggered: cards.openSetLayout() }
         MenuSeparator {}
-        MenuItem { objectName: "deckSettings"; text: qsTr("Settings…"); onTriggered: settingsDialog.open() }
+        MenuItem { objectName: "deckSettings"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/settings.svg"; icon.color: Theme.text; text: qsTr("Settings…"); onTriggered: settingsDialog.open() }
     }
     Menu {
         popupType: Popup.Item
         id: moreMenu; objectName: "deckMoreMenu"
-        MenuItem { objectName: "cardKitExport"; text: qsTr("Export card files…"); enabled: !cards.dirty && window.cardKit.canExport; onTriggered: cards.exportAcceptedFiles() }
+        MenuItem { objectName: "cardKitExport"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/export.svg"; icon.color: Theme.text; text: qsTr("Export card files…"); enabled: !cards.dirty && window.cardKit.canExport; onTriggered: cards.exportAcceptedFiles() }
         MenuSeparator {}
-        MenuItem { objectName: "cardKitAccept"; text: qsTr("Save this version"); enabled: !window.cardKit.currentAccepted || cards.dirty; onTriggered: cards.saveVersion() }
-        MenuItem { objectName: "cardKitReview"; text: qsTr("Check cards"); onTriggered: if (cards.flush()) window.cardKit.review(cards.selectedCardId) }
+        MenuItem { objectName: "cardKitAccept"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/verified.svg"; icon.color: Theme.text; text: qsTr("Save this version"); enabled: !window.cardKit.currentAccepted || cards.dirty; onTriggered: cards.saveVersion() }
+        MenuItem { objectName: "cardKitReview"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/search.svg"; icon.color: Theme.text; text: qsTr("Check cards"); onTriggered: if (cards.flush()) window.cardKit.review(cards.selectedCardId) }
         MenuSeparator {}
-        MenuItem { objectName: "cardKitCopyDraft"; text: qsTr("Copy complete draft"); onTriggered: window.cardKit.copyDraft(cards.composition) }
-        MenuItem { objectName: "cardKitReloadDraft"; text: qsTr("Reload saved draft…"); onTriggered: cards.requestReloadDraft() }
+        MenuItem { objectName: "cardKitCopyDraft"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/duplicate.svg"; icon.color: Theme.text; text: qsTr("Copy complete draft"); onTriggered: window.cardKit.copyDraft(cards.composition) }
+        MenuItem { objectName: "cardKitReloadDraft"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/back.svg"; icon.color: Theme.text; text: qsTr("Reload saved draft…"); onTriggered: cards.requestReloadDraft() }
     }
     ColumnLayout {
         anchors.fill: parent; spacing: 0
@@ -157,6 +224,9 @@ ApplicationWindow {
             visible: window.backend.projectOpen
             backend: window.backend; controller: window.cardKit; cardPrint: window.cardPrint
             materialEdit: window.materialEdit; audioPreview: null; imageTask: window.imageTask
+            assistant: window.assistant
+            assistantLanguage: window.preferences.languageMode === "zh_CN" || (window.preferences.languageMode === "system" && Qt.locale().name.startsWith("zh")) ? "zh_CN" : "en"
+            onAssistantSettingsRequested: settingsDialog.open()
             onProjectsRequested: window.showProjects()
             onFileExported: (path, kind, source) => window.exchange.recordOutput(path, kind, source)
         }
@@ -167,8 +237,8 @@ ApplicationWindow {
             Label { text: qsTr("Make cards. Arrange them. Print."); font.pixelSize: 30; font.weight: Font.DemiBold; color: Theme.text; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             Label { text: qsTr("Start with complete card images, a list of words, or your own mix of text and pictures. Choose the card shape and print size when you need them."); color: Theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 16; Layout.fillWidth: true }
             RowLayout {
-                ShapeButton { objectName: "deckWelcomeNew"; text: qsTr("New card project…"); primary: true; enabled: !window.exchange.active; onClicked: newProjectDialog.open() }
-                ShapeButton { text: qsTr("Open a Deck project…"); enabled: !window.exchange.active; onClicked: window.showProjects() }
+                ShapeButton { objectName: "deckWelcomeNew"; iconSource: "qrc:/qt/qml/Shape/Desktop/icons/add.svg"; text: qsTr("New card project…"); primary: true; enabled: !window.exchange.active; onClicked: newProjectDialog.open() }
+                ShapeButton { iconSource: "qrc:/qt/qml/Shape/Desktop/icons/open.svg"; text: qsTr("Open a Deck project…"); enabled: !window.exchange.active; onClicked: window.showProjects() }
             }
             Label { text: qsTr("Bringing cards from Shape? In Shape, choose Continue in Deck to copy the card set and its materials here."); color: Theme.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true }
         }
@@ -244,22 +314,36 @@ ApplicationWindow {
     ShapeDialog {
         id: settingsDialog
         objectName: "deckSettingsDialog"
-        parent: Overlay.overlay; anchors.centerIn: parent; width: Math.min(650, parent.width - 40)
+        parent: Overlay.overlay; anchors.centerIn: parent; width: Math.min(650, parent.width - 40); height: Math.min(740, parent.height - 40)
         modal: true; title: qsTr("Deck settings")
-        contentItem: ColumnLayout {
-            spacing: 12
+        contentItem: ScrollView {
+            id: settingsScroll; contentWidth: availableWidth; clip: true
+            ColumnLayout {
+            width: settingsScroll.availableWidth; spacing: 12
             Label { text: qsTr("Language"); color: Theme.text }
-            ShapeComboBox { objectName: "deckLanguage"; Layout.fillWidth: true; model: [qsTr("Follow system"), "English", "简体中文"]; currentIndex: window.preferences.languageMode === "zh_CN" ? 2 : window.preferences.languageMode === "en" ? 1 : 0; onActivated: index => window.preferences.languageMode = ["system", "en", "zh_CN"][index] }
+            ShapeComboBox { objectName: "deckLanguage"; Layout.fillWidth: true; model: [qsTr("Follow system"), "English", "简体中文"]; selectedIndex: window.preferences.languageMode === "zh_CN" ? 2 : window.preferences.languageMode === "en" ? 1 : 0; onActivated: index => window.preferences.languageMode = ["system", "en", "zh_CN"][index] }
             Label { text: qsTr("Appearance"); color: Theme.text }
-            ShapeComboBox { Layout.fillWidth: true; model: [qsTr("Follow system"), qsTr("Light"), qsTr("Dark")]; currentIndex: window.preferences.appearanceMode; onActivated: index => window.preferences.appearanceMode = index }
+            ShapeComboBox { objectName: "deckAppearance"; Layout.fillWidth: true; model: [qsTr("Follow system"), qsTr("Light"), qsTr("Dark")]; selectedIndex: window.preferences.appearanceMode; onActivated: index => window.preferences.appearanceMode = index }
+            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.border }
+            Label { text: qsTr("Card text · Infer Runtime"); color: Theme.text; font.weight: Font.DemiBold }
+            Label { Layout.fillWidth: true; text: qsTr("Generate card text with local models. Deck uses its own access; requests stay local with no cloud fallback."); color: Theme.muted; wrapMode: Text.WordWrap }
+            Label { Layout.fillWidth: true; text: window.assistant.credentialFile.length ? qsTr("Deck credential selected") : qsTr("Connect a Deck credential from Infer Runtime Apps & Access."); color: Theme.muted; wrapMode: Text.WordWrap }
+            RowLayout {
+                ShapeButton { objectName: "deckInferCredential"; iconSource: "qrc:/qt/qml/Shape/Desktop/icons/open.svg"; text: qsTr("Connect access…"); enabled: !window.assistant.busy; onClicked: inferCredential.open() }
+                ShapeButton { objectName: "deckInferCheck"; text: qsTr("Check connection"); enabled: !window.assistant.busy; busy: window.assistant.busy; onClicked: window.assistant.probe() }
+            }
+            Label { Layout.fillWidth: true; text: window.assistant.error || window.assistant.status; color: window.assistant.error.length ? Theme.danger : Theme.muted; wrapMode: Text.WordWrap }
+            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.border }
             Label { Layout.fillWidth: true; text: qsTr("Choose Shape to create images. Model and generation access are configured in Shape."); color: Theme.muted; wrapMode: Text.WordWrap }
             Label { Layout.fillWidth: true; text: window.documents.shapeExecutable || qsTr("Shape has not been selected."); color: Theme.muted; wrapMode: Text.WrapAnywhere }
             RowLayout { ShapeButton { text: qsTr("Choose Shape…"); onClicked: shapeExecutable.open() } ShapeButton { text: qsTr("Open Shape"); onClicked: window.documents.openShape() } }
             Label { Layout.fillWidth: true; text: window.materialEdit.shadowExecutable; color: Theme.muted; wrapMode: Text.WrapAnywhere }
             ShapeButton { text: qsTr("Choose Shadow…"); onClicked: shadowExecutable.open() }
             ShapeButton { objectName: "deckSettingsDone"; Layout.alignment: Qt.AlignRight; quiet: true; text: qsTr("Done"); onClicked: settingsDialog.close() }
+            }
         }
     }
     FileDialog { id: shapeExecutable; title: qsTr("Choose Shape application or executable"); onAccepted: window.documents.setShapeExecutable(selectedFile) }
+    FileDialog { id: inferCredential; title: qsTr("Choose Deck's Infer Runtime credential file"); onAccepted: if (window.assistant.setCredentialFile(selectedFile)) window.assistant.probe() }
     FileDialog { id: shadowExecutable; title: qsTr("Choose Shadow application or executable"); onAccepted: window.materialEdit.setShadowExecutable(selectedFile) }
 }

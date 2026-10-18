@@ -10,7 +10,8 @@ int runPdfCommand(const DeckCliClient& cli, const QString& requestPath, const QS
     try {
         DeckCliClient::checkNewOutput(resultPath);
         const auto request = DeckCliClient::readJson(requestPath);
-        const QStringList fields{"schema", "project", "source", "options", "destination"};
+        const QStringList
+            fields{"schema", "project", "source", "options", "imposition", "destination"};
         for (auto i = request.begin(); i != request.end(); ++i)
             if (!fields.contains(i.key()))
                 throw std::runtime_error("unknown PDF request field");
@@ -25,11 +26,13 @@ int runPdfCommand(const DeckCliClient& cli, const QString& requestPath, const QS
         QTemporaryFile planRequest;
         if (!planRequest.open())
             throw std::runtime_error("temporary request unavailable");
-        const QJsonObject action{
+        QJsonObject action{
             {"action", "print_plan"},
             {"source", request["source"]},
             {"options", request["options"].toObject()}
         };
+        if (request.contains("imposition"))
+            action["imposition"] = request["imposition"];
         const auto bytes = QJsonDocument(action).toJson(QJsonDocument::Compact);
         if (planRequest.write(bytes) != bytes.size() || !planRequest.flush())
             throw std::runtime_error("temporary request write failed");

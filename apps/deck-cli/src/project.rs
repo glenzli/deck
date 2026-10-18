@@ -134,6 +134,9 @@ pub fn card_action(path: &Path, request: &Path) -> Result<Value> {
     let text = std::str::from_utf8(&bytes)?;
     require_card_project(path)?;
     let mut project = ShapeProject::open(path)?;
+    if serde_json::from_str::<Value>(text)?["action"] == "print_plan" {
+        return crate::print::action(&project, text);
+    }
     Ok(serde_json::from_str(&project.card_kit_action_json(text)?)?)
 }
 

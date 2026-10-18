@@ -1,8 +1,10 @@
 //! Deck command assembly. Card behavior remains owned by the pinned Shape services.
+mod assistant;
 mod capabilities;
 mod files;
 mod material_return;
 mod pdf;
+mod print;
 mod project;
 mod transfer;
 
@@ -57,6 +59,13 @@ fn run() -> Result<Value> {
             return Err(usage());
         }
         return Ok(capabilities::report());
+    }
+    if command == "assist" {
+        let request = PathBuf::from(args.next().ok_or_else(usage)?);
+        if args.next().is_some() {
+            return Err(usage());
+        }
+        return assistant::run(&request);
     }
     let project = PathBuf::from(args.next().ok_or_else(usage)?);
     if command == "status" || command == "hash-file" {

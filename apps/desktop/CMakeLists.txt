@@ -44,12 +44,14 @@ add_custom_command(OUTPUT "${cli_binary}"
 add_custom_target(deck-cli-build DEPENDS "${cli_binary}")
 qt_add_executable(deck-desktop
     src/main.cpp src/deck_cli_client.cpp src/deck_cli_client.hpp
+    src/card_draft_assistant.cpp src/card_draft_assistant.hpp
     src/deck_document_controller.cpp src/deck_document_controller.hpp
     src/deck_exchange_controller.cpp src/deck_exchange_controller.hpp
     src/external_image_task_controller.cpp src/external_image_task_controller.hpp
     src/pdf_command.cpp src/pdf_command.hpp src/process_liveness.cpp src/process_liveness.hpp
     src/card_print_export.cpp src/card_print_export.hpp
     tests/deck_native_smoke.cpp tests/deck_native_smoke.hpp
+    tests/card_draft_assistant_smoke.cpp tests/card_draft_assistant_smoke.hpp
     "${upstream}/src/desktop_backend.cpp" "${upstream}/src/desktop_backend.hpp"
     "${upstream}/src/card_kit_controller.cpp" "${upstream}/src/card_kit_controller.hpp"
     src/card_print_controller.cpp src/card_print_controller.hpp
@@ -63,11 +65,13 @@ qt_add_qml_module(deck-desktop URI Shape.Desktop VERSION 1.0
     QML_FILES qml/DeckWindow.qml qml/Theme.qml
         qml/components/CardKitWorkspace.qml qml/components/CardLayoutOptions.qml
         qml/components/CardImageIntakeDialog.qml qml/components/CardPrintDialog.qml
-        qml/components/CardListImport.js qml/components/MaterialEditWorkspace.qml qml/components/ImageCompareWorkspace.qml
+        qml/components/CardListImport.js qml/components/CardDraftDialog.qml qml/components/MaterialEditWorkspace.qml qml/components/ImageCompareWorkspace.qml
         qml/components/ShapeButton.qml qml/components/ShapeTextField.qml
         qml/components/ShapeTextArea.qml qml/components/ShapeTextEditor.qml
         qml/components/ShapeComboBox.qml qml/components/ShapeDialog.qml
         qml/components/ShapeIcon.qml qml/components/ShapeIconButton.qml
+        qml/components/ShapeSpinBox.qml qml/components/ShapeCheckBox.qml
+        qml/components/CardLayoutPresets.qml qml/components/CardSheetPresets.qml
     RESOURCES ${icons})
 # Keep runtime/window branding and the macOS bundle on the same approved artwork.
 qt_add_resources(deck-desktop deck-app-branding
@@ -75,6 +79,11 @@ qt_add_resources(deck-desktop deck-app-branding
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/assets"
     FILES assets/app-icon.png)
 if(APPLE)
+    enable_language(OBJCXX)
+    target_sources(deck-desktop PRIVATE "${upstream}/src/mac_titlebar.mm" "${upstream}/src/mac_titlebar.hpp")
+    set_target_properties(deck-desktop PROPERTIES OBJCXX_STANDARD 20 OBJCXX_STANDARD_REQUIRED YES)
+    find_library(DECK_APPKIT_FRAMEWORK AppKit REQUIRED)
+    target_link_libraries(deck-desktop PRIVATE "${DECK_APPKIT_FRAMEWORK}")
     set(DECK_APP_ICON_FILE "${CMAKE_CURRENT_SOURCE_DIR}/assets/app-icon.icns")
     set_source_files_properties("${DECK_APP_ICON_FILE}" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
     target_sources(deck-desktop PRIVATE "${DECK_APP_ICON_FILE}")
@@ -102,5 +111,5 @@ install(PROGRAMS "${cli_binary}" DESTINATION bin)
 if(BUILD_TESTING)
     add_test(NAME deck-native-smoke COMMAND $<TARGET_FILE:deck-desktop> --smoke-native)
     set_tests_properties(deck-native-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120
-        FAIL_REGULAR_EXPRESSION "QQml;ReferenceError;TypeError;Binding loop;failed to load")
+        FAIL_REGULAR_EXPRESSION "QQml;ReferenceError;TypeError;Binding loop;failed to load;Cannot open: qrc:")
 endif()

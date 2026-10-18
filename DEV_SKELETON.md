@@ -17,6 +17,13 @@ own implementation facts. This initial repository is under active development.
 - CLI/AI actions use the same card services as the desktop. Actual PDF export must consume the
   existing print plan and writer; a plan or material ZIP is not a PDF.
 - Upstream dependency pins, imported source provenance and licenses remain reviewable.
+- Deck's transient sheet choices live in the CLI print owner, shared by desktop preparation and
+  PDF commands. It fits a chosen grid, selects copies and translates the pinned planner's admitted
+  slot/crop-mark template. Card rendering, readable text checks and the single Qt painter stay reused.
+- The card draft assistant owns asynchronous text-candidate lifecycle and cancellation. The
+  packaged CLI's assistant owner uses the pinned official Infer Runtime SDK for discovery,
+  authentication, exact contracts and local-only requests. It never writes project content;
+  explicit candidate application uses the existing CardKit draft service with a captured target.
 
 ## Initial scope
 

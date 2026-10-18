@@ -1,5 +1,39 @@
 # Deck CLI and AI calls
 
+## Card text suggestions
+
+`deck-cli assist request.json` uses the official Infer Runtime SDK at the existing locked
+revision `c74c503a27b74d76ab01bc1d9990d56e21c45969`. It discovers the dated Consumer Core and
+Responses capability; no hard-coded endpoint, provider credentials or Shape token is used.
+Set `DECK_INFER_CREDENTIAL_FILE` to Deck's own owner-only token file. The desktop selects this
+file in Settings or discovers `infer.token` beside its own settings file. Configure an independent
+Deck identity in Infer Runtime Apps & Access with `text.edit`, local-only placement, no fallback,
+zero cost, interactive priority, and the foundational capability floor. Console identity changes
+require restarting its managed Runtime before the identity can be used.
+
+```json
+{"schema":"deck.assistant/1","operation":"start","prompt":"Six nature observation cards for children","count":6,"language":"en"}
+```
+
+`operation:"probe"` checks Core/Responses availability and, when credentials are configured,
+authenticated access. A start uses foreground SSE without requiring durable background storage. Its stdout is newline-delimited
+JSON: a `deck.assistant.progress/1` receipt exposes the job identity, followed by one terminal
+`deck.cli.result/1` envelope containing the validated suggestions. `operation:"cancel"` uses Core Job
+cancellation for that identity and reports the actual confirmed
+`cancelled` flag. A stopped wait is never reported as confirmed provider cancellation.
+
+Suggestions are strictly bounded JSON with `title`, `rules` and optional `art_prompt`; counts
+are 1–16 per request. They never contain trusted card IDs, material pins or automatic acceptance.
+The desktop retains the project, kit and complete draft snapshot, previews the suggestions, and
+appends fresh card IDs only after explicit review while that snapshot is still current. Existing
+card data and accepted history remain owned by the CardKit draft service. AI callers likewise
+apply reviewed text through the normal exact-digest `draft_save` action.
+
+Image generation continues through the existing Shape handoff and Shape's Infer Runtime access;
+Shadow remains the independent specialist image editor.
+
+## Card authoring and printing
+
 Deck's CLI is a real consumer of the same pinned CardKit services used by the desktop. It does not
 reimplement card layout, silently accept a proposal, use another application's inference credentials,
 or inspect another desktop session's transient Candidates.
@@ -125,6 +159,21 @@ Options can be omitted or `{}` for defaults. Letter uses `"paper":"letter"`. Exi
 width/height, margin/gap and crop-mark settings retain their Core definitions; a missing axis derives
 from the composition ratio. Print options do not rewrite accepted content. This remains single-sided
 home printing, without bleed, duplex registration or commercial prepress claims.
+
+Both `print_plan` and `deck.pdf-export/1` also accept an optional top-level `imposition`:
+
+```json
+{"columns":2,"rows":3,"content":"one_each"}
+```
+
+Columns and rows must both be supplied (1–8 each), or both omitted for fixed-size automatic
+packing. An explicit grid proportionally fits the accepted canvas and overrides the optional card
+dimensions. `content` is `quantities` (default), `one_each`, or `repeat`. Repeat requires `card_id`
+from that exact accepted version; optional `copies` is 1–4096, and omission fills one sheet.
+All accepted faces still pass Shape's resource/readability checks. Deck translates its admitted
+slot/crop template and reuses its SVGs; accepted quantities, drafts and history never change.
+The plan includes the normalized `imposition` with the usual physical geometry. Legacy requests
+without `imposition` return the unchanged Shape plan.
 
 The CLI canonicalizes the project identity, snapshots the admitted request and invokes
 `deck-desktop --export-pdf REQUEST --result NEWRESULT`. A successful native receipt is required.

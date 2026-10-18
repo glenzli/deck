@@ -118,7 +118,7 @@ ShapeDialog {
             text: qsTr("Each image becomes one complete card with one copy, in the order shown below. Existing cards stay. Images are shown in full without cropping; file names are not printed on the cards.")
             wrapMode: Text.WordWrap; color: Theme.muted
         }
-        CheckBox {
+        ShapeCheckBox {
             objectName: "cardImagesUseShape"
             visible: root.canUseImageShape
             text: qsTr("Use the first added image’s proportions for this set")

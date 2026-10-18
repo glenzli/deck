@@ -14,16 +14,35 @@ The first extraction is under active development. This repository is not a packa
 Create or reopen a `.deck` project. Use **Add** to start from a blank card, images or a list.
 The card stays in the center while the right-hand **Content / Layout** inspector edits its text,
 images, quantities and layout. Extra fields fold away, and per-card layout can override the set
-defaults. Card proportions are independent of the physical print size.
+defaults. Eight visual presets cover text, study notes, quotes, pictures, photos and framed or
+game-style cards. Card proportions are independent of the physical print size.
 
 Drafts save automatically. **Accept and print** checks and adopts the current card version before
 opening the sheet preview; an already accepted version shows **Print**. Export an actual PDF with
-card quantities and crop marks. Card-face export and version actions live in the **More** menu.
+card quantities and crop marks. Choose a quick grid (1×1 through 4×4), enter 1–8 columns and rows,
+or keep a fixed physical card size. Mix designs using their quantities, print one of each, or repeat
+one selected card to fill a sheet or a chosen copy count. Fine adjustments hold margins, spacing
+and crop marks. All accepted faces still pass the reused print-readiness checks.
+Card-face export and version actions live in the **More** menu.
 Print the PDF at **100% / actual size** to keep its physical measurements.
 
 The initial scope is single-sided home printing. Duplex registration, bleed and mixed-size
 packing are not implemented. Incomplete cards remain saveable drafts; print readiness is checked
 separately. Accepted versions remain available after subsequent edits.
+
+The workbench uses neutral black, white and grey surfaces. Language, appearance and settings
+are available from the top bar, including before opening a project. English and Simplified Chinese,
+light, dark and follow-system modes update immediately and persist between launches. New profiles
+start in light mode. Compact actions have icons, tooltips and accessible names; printing keeps a
+text label. Reorder and duplicate cards beside the preview, or use the card menu. Standard New, Open
+and Print shortcuts are available. On macOS, the native window buttons and toolbar share one title
+area; drag the Deck label or the empty toolbar area to move the window.
+
+**Create with AI** turns a short brief into 1–16 card-text suggestions using Infer Runtime.
+Review the suggestions, then explicitly add them to the current draft. A changed project or draft
+requires a new generation; suggestions never replace existing cards or accept a version. Deck uses
+its own access identity with local-only text generation, no cloud fallback and a zero-cost ceiling.
+Connect Deck's access in settings if it has not yet been configured.
 
 ## Work with other applications
 
