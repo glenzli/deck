@@ -10,6 +10,7 @@ ColumnLayout {
     property var resolved: ({})
     property bool perCard: false
     property bool expanded: false
+    property bool positionExpanded: false
     property string editIdentity: ""
     property bool editingEnabled: true
     property string colorIdentity: ""
@@ -33,6 +34,11 @@ ColumnLayout {
         const next = configuration ? JSON.parse(JSON.stringify(configuration)) : ({})
         if (!perCard && !next.mode) next.mode = "auto"
         next[key] = value; validationMessage = ""; edited(next)
+    }
+    function resetTextPosition() {
+        const next = configuration ? JSON.parse(JSON.stringify(configuration)) : ({mode: "auto"})
+        next.text_vertical_align = "auto"; next.text_offset_x_percent = 0; next.text_offset_y_percent = 0
+        edited(next)
     }
     function modeIndex() {
         return Math.max(0, choices.indexOf(configuration && configuration.mode ? configuration.mode : ""))
@@ -108,6 +114,23 @@ ColumnLayout {
         text: qsTr("Edges outside the image area will be cropped. Check the preview before printing.")
         color: Theme.warning; wrapMode: Text.WordWrap; font.pixelSize: 12
     }
+    ColumnLayout {
+        visible: ["auto", "image_text", "classic"].indexOf(root.value("mode", "auto")) >= 0
+        Layout.fillWidth: true; spacing: 6
+        Label { text: qsTr("Picture position"); color: Theme.muted; font.pixelSize: 11 }
+        ShapeComboBox {
+            objectName: root.perCard ? "cardImagePositionOverride" : "cardImagePositionDefault"
+            Layout.fillWidth: true
+            model: [qsTr("Automatic"), qsTr("Picture above text"), qsTr("Picture below text"), qsTr("Picture on the left"), qsTr("Picture on the right"), qsTr("Photo with caption panel")]
+            selectedIndex: Math.max(0, ["auto","top","bottom","left","right","background"].indexOf(root.value("image_position", "auto")))
+            onActivated: index => root.setValue("image_position", ["auto","top","bottom","left","right","background"][index])
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            Label { Layout.fillWidth: true; text: qsTr("Picture share (%)"); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+            ShapeSpinBox { objectName: root.perCard ? "cardImageShareOverride" : "cardImageShareDefault"; from: 20; to: 80; stepSize: 5; value: root.value("image_share_percent", 50); onValueModified: root.setValue("image_share_percent", value) }
+        }
+    }
     RowLayout {
         Layout.fillWidth: true
         Label { Layout.fillWidth: true; text: qsTr("Text size (%)"); color: Theme.muted }
@@ -116,6 +139,36 @@ ColumnLayout {
             from: 50; to: 300; stepSize: 10; editable: true; value: root.value("text_scale_percent", 100)
             onValueModified: root.setValue("text_scale_percent", value)
         }
+    }
+    ShapeButton { objectName: "cardTextPositionToggle"; quiet: true; text: qsTr("Text position…"); selected: root.positionExpanded; onClicked: root.positionExpanded = !root.positionExpanded }
+    ColumnLayout {
+        visible: root.positionExpanded; Layout.fillWidth: true; spacing: 7
+        Label { text: qsTr("Horizontal alignment"); color: Theme.muted; font.pixelSize: 11 }
+        ShapeComboBox {
+            objectName: root.perCard ? "cardTextAlignOverride" : "cardTextAlignDefault"
+            Layout.fillWidth: true; model: [qsTr("Left"), qsTr("Center"), qsTr("Right")]
+            selectedIndex: Math.max(0, ["left", "center", "right"].indexOf(root.value("text_align", "left")))
+            onActivated: index => root.setValue("text_align", ["left", "center", "right"][index])
+        }
+        Label { text: qsTr("Vertical alignment"); color: Theme.muted; font.pixelSize: 11 }
+        ShapeComboBox {
+            objectName: root.perCard ? "cardTextVerticalOverride" : "cardTextVerticalDefault"
+            Layout.fillWidth: true; model: [qsTr("Automatic"), qsTr("Top"), qsTr("Center"), qsTr("Bottom")]
+            selectedIndex: Math.max(0, ["auto","top","center","bottom"].indexOf(root.value("text_vertical_align", "auto")))
+            onActivated: index => root.setValue("text_vertical_align", ["auto","top","center","bottom"][index])
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            Label { Layout.fillWidth: true; text: qsTr("Horizontal offset (%)"); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+            ShapeSpinBox { objectName: root.perCard ? "cardTextOffsetXOverride" : "cardTextOffsetXDefault"; from: -30; to: 30; value: root.value("text_offset_x_percent", 0); onValueModified: root.setValue("text_offset_x_percent", value) }
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            Label { Layout.fillWidth: true; text: qsTr("Vertical offset (%)"); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+            ShapeSpinBox { objectName: root.perCard ? "cardTextOffsetYOverride" : "cardTextOffsetYDefault"; from: -30; to: 30; value: root.value("text_offset_y_percent", 0); onValueModified: root.setValue("text_offset_y_percent", value) }
+        }
+        Label { Layout.fillWidth: true; text: qsTr("Offsets use the card width and height. Keep all text inside the card before printing."); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+        ShapeButton { quiet: true; text: qsTr("Reset text position"); onClicked: root.resetTextPosition() }
     }
     ToolButton { objectName: "cardLayoutAdvanced"; text: (root.expanded ? "⌄  " : "›  ") + qsTr("Colors, border & spacing"); font.pixelSize: 11; onClicked: root.expanded = !root.expanded }
     ColumnLayout {
@@ -167,14 +220,6 @@ ColumnLayout {
             objectName: root.perCard ? "cardBorderOverride" : "cardBorderDefault"
             text: qsTr("Show a border"); checked: root.value("border", false)
             onToggled: root.setValue("border", checked)
-        }
-        Label { text: qsTr("Text alignment"); color: Theme.muted }
-        ShapeComboBox {
-            objectName: root.perCard ? "cardTextAlignOverride" : "cardTextAlignDefault"
-            Layout.fillWidth: true
-            model: [qsTr("Left"), qsTr("Center"), qsTr("Right")]
-            selectedIndex: Math.max(0, ["left", "center", "right"].indexOf(root.value("text_align", "left")))
-            onActivated: index => root.setValue("text_align", ["left", "center", "right"][index])
         }
         RowLayout {
             Layout.fillWidth: true

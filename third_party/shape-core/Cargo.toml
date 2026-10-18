@@ -1,0 +1,39 @@
+[package]
+name = "shape-core"
+description = "Application use cases for Shape creative projects"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+authors = ["Shape contributors"]
+license = "MIT"
+publish = false
+
+[dependencies]
+base64 = "0.22.1"
+blake3 = "1.8.5"
+time = { version = "0.3.55", features = ["formatting", "parsing"] }
+uuid = { version = "1.23.2", features = ["serde", "std", "v7"] }
+zip = { version = "4.6.1", default-features = false }
+serde = { version = "1.0.228", features = ["derive"] }
+sha2 = "0.10.9"
+rustix = { version = "1.1.4", features = ["fs", "process"] }
+serde_json = "1.0.150"
+shape-domain = { path = "../shape-domain" }
+shape-execution = { git = "https://github.com/glenzli/shape.git", rev = "983022bf35bcfda332ef57aeab81d8015cf5f280" }
+shape-store = { git = "https://github.com/glenzli/shape.git", rev = "983022bf35bcfda332ef57aeab81d8015cf5f280" }
+thiserror = "2.0.18"
+
+[dev-dependencies]
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"

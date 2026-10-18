@@ -30,6 +30,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QTimer>
+#include <cmath>
 #include <filesystem>
 #include <functional>
 #include <stdexcept>
@@ -235,6 +236,23 @@ bool deck_native_smoke::verify(
         const auto addedId = workspace.property("selectedCardId").toString();
         require(value(workspace, "cards").toList().size() == 2, "menu adds a blank stable-ID card");
         click(*window, child(root, ("cardKitRowMenu-" + addedId).toUtf8().constData()));
+        require(
+            window->grabWindow().save(QDir(directory).filePath("deck-card-menu.png")),
+            "styled card menu screenshot"
+        );
+        // Popup coordinates are relative to their visual parent; compare in window space.
+        auto* rowAnchor = qobject_cast<QQuickItem*>(
+            &child(root, ("cardKitRowMenu-" + addedId).toUtf8().constData())
+        );
+        auto* firstAction = qobject_cast<QQuickItem*>(&child(root, "deckDuplicateCardMenu"));
+        const auto anchorRect = rowAnchor->mapRectToScene(rowAnchor->boundingRect());
+        const auto actionRect = firstAction->mapRectToScene(firstAction->boundingRect());
+        require(
+            std::abs(actionRect.left() - anchorRect.left()) <= 16
+                && actionRect.top() >= anchorRect.bottom()
+                && actionRect.top() <= anchorRect.bottom() + 20,
+            "card action menu stays anchored beside its row"
+        );
         click(*window, child(root, "cardKitMoveUp"));
         require(
             value(workspace, "cards").toList().first().toMap().value("id").toString() == addedId
@@ -262,6 +280,24 @@ bool deck_native_smoke::verify(
                 && value(workspace, "cards").toList() == cardIdsBeforePreset,
             "visual preset changes only layout and preserves card content and IDs"
         );
+        click(*window, child(root, "deckCardLayoutScope"));
+        click(*window, child(child(root, "cardKitCardLayoutOptions"), "cardPreset-caption"));
+        require(
+            evaluate(workspace, "flush()").toBool()
+                && cards.review(workspace.property("selectedCardId").toString()),
+            "missing-art preset saves through the ordinary draft owner"
+        );
+        settle(150);
+        require(
+            cards.preview().value("svg").toString().contains("image-placeholder")
+                && !cards.preview().value("ready_to_export").toBool(),
+            "the native preview reserves missing artwork without claiming export readiness"
+        );
+        require(
+            window->grabWindow().save(QDir(directory).filePath("deck-image-placeholder.png")),
+            "actual missing-art placeholder screenshot"
+        );
+        click(*window, child(child(root, "cardKitCardLayoutOptions"), "cardPreset-clean-text"));
         click(*window, child(root, "deckContentTab"));
         click(*window, child(root, "deckImageMenuButton"));
         click(*window, child(root, "cardKitGenerateArtwork"));
@@ -326,6 +362,11 @@ bool deck_native_smoke::verify(
                  QJsonObject{
                      {"mode", "image_text"},
                      {"image_fit", "cover"},
+                     {"image_position", "left"},
+                     {"image_share_percent", 35},
+                     {"text_vertical_align", "center"},
+                     {"text_offset_x_percent", 1},
+                     {"text_offset_y_percent", -1},
                      {"padding_percent", 10}
                  }}
             }

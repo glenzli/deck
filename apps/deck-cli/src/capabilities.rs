@@ -41,6 +41,7 @@ pub fn report() -> Value {
             "external_edit_argv":["<Deck desktop executable>","--external-edit","<deck.external-edit/1 request.json>","--result","<new result.json>"],
             "shape_capabilities_argv":["<Shape executable>","--handoff-capabilities"],"shape_material_argv":["<Shape executable>","--deck-material-task","<deck.material-task/1 task.json>","--result","<new result.json>"],
             "human_review_required":true,"headless_image_generation":false},
+        "card_layout_extensions":{"schema":"deck.card-layout/1","image_position":["auto","top","bottom","left","right","background"],"image_share_percent":"20..80","text_vertical_align":["auto","top","center","bottom"],"text_offset_x_percent":"-30..30 of canvas width","text_offset_y_percent":"-30..30 of canvas height","placeholder_is_printable":false,"older_consumers":"use exported PDF/card images for extended layouts"},
         "print_imposition":{"optional_top_level":"imposition","columns_rows":"both omitted or 1..8 each","content":["quantities","one_each","repeat"],"repeat":{"card_id":"exact accepted card id","copies":"1..4096 or omit to fill one sheet"},"changes_accepted_content":false},
         "limits":{"cards":64,"materials":64,"transfer_material_bytes":134_217_728,"print_copies":4096,"print_pages":256},
         "boundaries":{"accepted_history":"immutable","acceptance":"explicit_action","incomplete_checklists":"save and accept permitted; export readiness is checked separately",

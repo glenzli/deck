@@ -265,3 +265,19 @@ separately. Stale returns remain available as files for an explicit manual impor
 
 The full request/result and transfer contracts are documented in Shape's
 [Deck handoff contract](https://github.com/glenzli/shape/blob/main/docs/DECK_HANDOFF.md).
+
+## Deck card-layout extensions
+
+In flexible composition/card `layout`, optional `image_position` is `auto`, `top`, `bottom`,
+`left`, `right` or `background`; `image_share_percent` is 20–80. `text_vertical_align` is
+`auto`, `top`, `center` or `bottom`. Signed `text_offset_x_percent` / `text_offset_y_percent`
+are -30–30, relative to the complete canvas width/height, and move the complete text block.
+Readability checks still reject printing when positioned text leaves the card. The same owner
+renders draft previews, accepted card files and physical sheets. A missing-image placeholder
+exists only in authoring previews; it never substitutes for accepted artwork in a PDF.
+
+Absent fields preserve old layout behavior and serialization. Editable compositions using these
+new options require Deck or another consumer implementing these extensions; older Shape builds
+can consume exported PDFs/card images. Opening old projects never adds these fields or rewrites
+accepted revisions. Local adaptations and exact upstream hashes are in
+`third_party/shape-cardkit-provenance.json`.

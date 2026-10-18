@@ -10,13 +10,17 @@ own implementation facts. This initial repository is under active development.
 ## Ownership
 
 - Deck's application shell owns card navigation, project selection, user settings and presentation.
-- The reused CardKit owners own card data, recoverable drafts, preview, accepted versions and
+- The pinned CardKit domain/core owners, adapted under `third_party/shape-domain` and
+  `third_party/shape-core`, own card data, recoverable drafts, preview, accepted versions and
   card-face/print geometry. The reused Qt print owner paints both preview and PDF.
 - Explicit integration adapters exchange selected material snapshots and receipts with Shape and
   Shadow. A connection must not become a second writable owner of either application's project.
 - CLI/AI actions use the same card services as the desktop. Actual PDF export must consume the
   existing print plan and writer; a plan or material ZIP is not a PDF.
-- Upstream dependency pins, imported source provenance and licenses remain reviewable.
+- Upstream dependency pins, imported source provenance and licenses remain reviewable. The
+  vendored owners retain their complete crate boundaries and MIT licenses; `shape-cardkit-provenance.json`
+  lists base file hashes and intentional adaptations. CLI and native bridge resolve the same Cargo
+  patches. Image placeholders are authoring aids; missing artwork still blocks printing.
 - Deck's transient sheet choices live in the CLI print owner, shared by desktop preparation and
   PDF commands. It fits a chosen grid, selects copies and translates the pinned planner's admitted
   slot/crop-mark template. Card rendering, readable text checks and the single Qt painter stay reused.

@@ -602,10 +602,11 @@ Page {
                                     }
                                 }
                                 ShapeIconButton {
+                                    id: cardRowMenuButton
                                     objectName: "cardKitRowMenu-" + (cardRow.card.id || "")
                                     visible: cardRow.hovered || root.selectedCardId === cardRow.card.id
                                     buttonSize: 28; iconSize: Theme.compactIconSize; source: "../../icons/more.svg"; toolTipText: qsTr("Card actions")
-                                    onClicked: { root.selectedCardId = cardRow.card.id; cardActions.targetIdentity = root.menuIdentity(true); cardActions.popup() }
+                                    onClicked: { root.selectedCardId = cardRow.card.id; cardActions.targetIdentity = root.menuIdentity(true); cardActions.popup(cardRowMenuButton, 0, cardRowMenuButton.height + 4) }
                                 }
                             }
                         }
@@ -868,27 +869,27 @@ Page {
             }
         }
     }
-    Menu {
+    ShapeMenu {
         popupType: Popup.Item
         id: addMenu; objectName: "cardKitAddMenu"
         property string targetIdentity: ""
         readonly property bool targetCurrent: targetIdentity === root.menuIdentity(false)
-        MenuItem { objectName: "cardKitAddCard"; icon.source: "../../icons/add.svg"; icon.color: Theme.text; text: qsTr("Blank card"); enabled: addMenu.targetCurrent && root.cards.length < 64; onTriggered: if (addMenu.targetCurrent) root.addCard() }
-        MenuItem { objectName: "cardKitAddImages"; icon.source: "../../icons/image.svg"; icon.color: Theme.text; text: qsTr("Existing card images…"); enabled: addMenu.targetCurrent && root.cards.length < 64; onTriggered: if (addMenu.targetCurrent) root.beginCardImages() }
-        MenuItem { objectName: "cardKitAddFromList"; icon.source: "../../icons/layout.svg"; icon.color: Theme.text; text: qsTr("Cards from a list…"); enabled: addMenu.targetCurrent && root.cards.length < 64; onTriggered: if (addMenu.targetCurrent) root.openCardList() }
-        MenuSeparator {}
-        MenuItem { objectName: "deckAddAICards"; icon.source: "../../icons/sparkle.svg"; icon.color: Theme.text; text: qsTr("Create cards with AI…"); enabled: addMenu.targetCurrent && root.cards.length < 64 && !root.assistant.busy; onTriggered: if (addMenu.targetCurrent) root.openAssistant() }
+        ShapeMenuItem { objectName: "cardKitAddCard"; icon.source: "../../icons/add.svg"; icon.color: Theme.text; text: qsTr("Blank card"); enabled: addMenu.targetCurrent && root.cards.length < 64; onTriggered: if (addMenu.targetCurrent) root.addCard() }
+        ShapeMenuItem { objectName: "cardKitAddImages"; icon.source: "../../icons/image.svg"; icon.color: Theme.text; text: qsTr("Existing card images…"); enabled: addMenu.targetCurrent && root.cards.length < 64; onTriggered: if (addMenu.targetCurrent) root.beginCardImages() }
+        ShapeMenuItem { objectName: "cardKitAddFromList"; icon.source: "../../icons/layout.svg"; icon.color: Theme.text; text: qsTr("Cards from a list…"); enabled: addMenu.targetCurrent && root.cards.length < 64; onTriggered: if (addMenu.targetCurrent) root.openCardList() }
+        ShapeMenuSeparator {}
+        ShapeMenuItem { objectName: "deckAddAICards"; icon.source: "../../icons/sparkle.svg"; icon.color: Theme.text; text: qsTr("Create cards with AI…"); enabled: addMenu.targetCurrent && root.cards.length < 64 && !root.assistant.busy; onTriggered: if (addMenu.targetCurrent) root.openAssistant() }
     }
-    Menu {
+    ShapeMenu {
         popupType: Popup.Item
         id: cardActions; objectName: "cardKitCardActions"
         property string targetIdentity: ""
         readonly property bool targetCurrent: targetIdentity === root.menuIdentity(true)
-        MenuItem { objectName: "deckDuplicateCardMenu"; icon.source: "../../icons/duplicate.svg"; icon.color: Theme.text; text: qsTr("Duplicate card"); enabled: cardActions.targetCurrent && root.cards.length < 64; onTriggered: if (cardActions.targetCurrent) root.duplicateCard() }
-        MenuItem { objectName: "cardKitMoveUp"; icon.source: "../../icons/arrow-up.svg"; icon.color: Theme.text; text: qsTr("Move up"); enabled: cardActions.targetCurrent && root.cards.findIndex(c => c.id === root.selectedCardId) > 0; onTriggered: if (cardActions.targetCurrent) root.moveCard(-1) }
-        MenuItem { objectName: "cardKitMoveDown"; icon.source: "../../icons/arrow-down.svg"; icon.color: Theme.text; text: qsTr("Move down"); enabled: cardActions.targetCurrent && root.cards.findIndex(c => c.id === root.selectedCardId) < root.cards.length - 1; onTriggered: if (cardActions.targetCurrent) root.moveCard(1) }
-        MenuSeparator {}
-        MenuItem { objectName: "cardKitRemoveCard"; icon.source: "../../icons/trash.svg"; icon.color: Theme.text; text: qsTr("Remove card"); enabled: cardActions.targetCurrent && root.cards.length > 1; onTriggered: if (cardActions.targetCurrent) root.removeCard() }
+        ShapeMenuItem { objectName: "deckDuplicateCardMenu"; icon.source: "../../icons/duplicate.svg"; icon.color: Theme.text; text: qsTr("Duplicate card"); enabled: cardActions.targetCurrent && root.cards.length < 64; onTriggered: if (cardActions.targetCurrent) root.duplicateCard() }
+        ShapeMenuItem { objectName: "cardKitMoveUp"; icon.source: "../../icons/arrow-up.svg"; icon.color: Theme.text; text: qsTr("Move up"); enabled: cardActions.targetCurrent && root.cards.findIndex(c => c.id === root.selectedCardId) > 0; onTriggered: if (cardActions.targetCurrent) root.moveCard(-1) }
+        ShapeMenuItem { objectName: "cardKitMoveDown"; icon.source: "../../icons/arrow-down.svg"; icon.color: Theme.text; text: qsTr("Move down"); enabled: cardActions.targetCurrent && root.cards.findIndex(c => c.id === root.selectedCardId) < root.cards.length - 1; onTriggered: if (cardActions.targetCurrent) root.moveCard(1) }
+        ShapeMenuSeparator {}
+        ShapeMenuItem { objectName: "cardKitRemoveCard"; destructive: true; icon.source: "../../icons/trash.svg"; icon.color: Theme.text; text: qsTr("Remove card"); enabled: cardActions.targetCurrent && root.cards.length > 1; onTriggered: if (cardActions.targetCurrent) root.removeCard() }
     }
     CardDraftDialog {
         id: assistantDialog
@@ -899,28 +900,28 @@ Page {
         onAppendRequested: (rows, identity) => root.appendAssistantCards(rows, identity)
         onSettingsRequested: root.assistantSettingsRequested()
     }
-    Menu {
+    ShapeMenu {
         popupType: Popup.Item
         id: imageMenu; objectName: "deckImageMenu"
         property string targetIdentity: ""
         readonly property bool targetCurrent: targetIdentity === root.menuIdentity(true)
         function openFor(button) { targetIdentity = root.menuIdentity(true); popup(button, 0, button.height) }
-        MenuItem { objectName: "cardKitImportArtwork"; icon.source: "../../icons/open.svg"; icon.color: Theme.text; text: qsTr("Import image…"); enabled: imageMenu.targetCurrent; onTriggered: if (imageMenu.targetCurrent) root.beginImageImport() }
-        MenuItem { objectName: "cardKitGenerateArtwork"; icon.source: "../../icons/sparkle.svg"; icon.color: Theme.text; text: qsTr("Create image in Shape…"); enabled: imageMenu.targetCurrent; onTriggered: if (imageMenu.targetCurrent) root.openArtworkGeneration() }
-        Menu {
+        ShapeMenuItem { objectName: "cardKitImportArtwork"; icon.source: "../../icons/open.svg"; icon.color: Theme.text; text: qsTr("Import image…"); enabled: imageMenu.targetCurrent; onTriggered: if (imageMenu.targetCurrent) root.beginImageImport() }
+        ShapeMenuItem { objectName: "cardKitGenerateArtwork"; icon.source: "../../icons/sparkle.svg"; icon.color: Theme.text; text: qsTr("Create image in Shape…"); enabled: imageMenu.targetCurrent; onTriggered: if (imageMenu.targetCurrent) root.openArtworkGeneration() }
+        ShapeMenu {
         popupType: Popup.Item
             id: acceptedImages; objectName: "cardKitArtworkPicker"; title: qsTr("Images in this project")
             enabled: imageMenu.targetCurrent && root.images.length > 1
             Instantiator {
                 model: root.images.slice(1)
-                delegate: MenuItem { required property var modelData; text: modelData.name; onTriggered: if (imageMenu.targetCurrent && root.currentCard) root.bindArtwork(root.selectedCardId, root.pin(modelData)) }
+                delegate: ShapeMenuItem { required property var modelData; text: modelData.name; onTriggered: if (imageMenu.targetCurrent && root.currentCard) root.bindArtwork(root.selectedCardId, root.pin(modelData)) }
                 onObjectAdded: (index, object) => acceptedImages.insertItem(index, object)
                 onObjectRemoved: (index, object) => acceptedImages.removeItem(object)
             }
         }
-        MenuItem { objectName: "cardKitRefineArtwork"; text: root.artworkTargetExists && root.editingArtwork && root.artworkCardId === root.selectedCardId ? qsTr("Continue in Shadow…") : qsTr("Refine in Shadow…"); enabled: imageMenu.targetCurrent && root.currentCard !== null && !!root.currentCard.artwork; onTriggered: if (imageMenu.targetCurrent) root.beginArtworkEdit() }
-        MenuSeparator {}
-        MenuItem { objectName: "cardKitRemoveImage"; icon.source: "../../icons/trash.svg"; icon.color: Theme.text; text: qsTr("Remove image"); enabled: imageMenu.targetCurrent && root.currentCard !== null && !!root.currentCard.artwork; onTriggered: if (imageMenu.targetCurrent) root.removeArtwork() }
+        ShapeMenuItem { objectName: "cardKitRefineArtwork"; text: root.artworkTargetExists && root.editingArtwork && root.artworkCardId === root.selectedCardId ? qsTr("Continue in Shadow…") : qsTr("Refine in Shadow…"); enabled: imageMenu.targetCurrent && root.currentCard !== null && !!root.currentCard.artwork; onTriggered: if (imageMenu.targetCurrent) root.beginArtworkEdit() }
+        ShapeMenuSeparator {}
+        ShapeMenuItem { objectName: "cardKitRemoveImage"; destructive: true; icon.source: "../../icons/trash.svg"; icon.color: Theme.text; text: qsTr("Remove image"); enabled: imageMenu.targetCurrent && root.currentCard !== null && !!root.currentCard.artwork; onTriggered: if (imageMenu.targetCurrent) root.removeArtwork() }
     }
     function exportKitFiles(file, projectId, projectPath, sourcePin) {
         if (projectId !== backend.projectId || projectPath !== backend.bundlePath

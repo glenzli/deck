@@ -153,49 +153,49 @@ ApplicationWindow {
             }
         }
     }
-    Menu {
+    ShapeMenu {
         id: languageMenu; objectName: "deckLanguageMenu"; popupType: Popup.Item
-        MenuItem { text: qsTr("Follow system"); checkable: true; checked: window.preferences.languageMode === "system"; onTriggered: window.preferences.languageMode = "system" }
-        MenuItem { objectName: "deckEnglish"; text: "English"; checkable: true; checked: window.preferences.languageMode === "en"; onTriggered: window.preferences.languageMode = "en" }
-        MenuItem { objectName: "deckChinese"; text: "简体中文"; checkable: true; checked: window.preferences.languageMode === "zh_CN"; onTriggered: window.preferences.languageMode = "zh_CN" }
+        ShapeMenuItem { text: qsTr("Follow system"); checkable: true; checked: window.preferences.languageMode === "system"; onTriggered: window.preferences.languageMode = "system" }
+        ShapeMenuItem { objectName: "deckEnglish"; text: "English"; checkable: true; checked: window.preferences.languageMode === "en"; onTriggered: window.preferences.languageMode = "en" }
+        ShapeMenuItem { objectName: "deckChinese"; text: "简体中文"; checkable: true; checked: window.preferences.languageMode === "zh_CN"; onTriggered: window.preferences.languageMode = "zh_CN" }
     }
-    Menu {
+    ShapeMenu {
         id: appearanceMenu; objectName: "deckAppearanceMenu"; popupType: Popup.Item
-        MenuItem { objectName: "deckAppearanceSystem"; text: qsTr("Follow system"); icon.source: "qrc:/qt/qml/Shape/Desktop/icons/monitor.svg"; icon.color: Theme.text; checkable: true; checked: window.preferences.appearanceMode === 0; onTriggered: window.preferences.appearanceMode = 0 }
-        MenuItem { objectName: "deckAppearanceLight"; text: qsTr("Light"); icon.source: "qrc:/qt/qml/Shape/Desktop/icons/sun.svg"; icon.color: Theme.text; checkable: true; checked: window.preferences.appearanceMode === 1; onTriggered: window.preferences.appearanceMode = 1 }
-        MenuItem { objectName: "deckAppearanceDark"; text: qsTr("Dark"); icon.source: "qrc:/qt/qml/Shape/Desktop/icons/moon.svg"; icon.color: Theme.text; checkable: true; checked: window.preferences.appearanceMode === 2; onTriggered: window.preferences.appearanceMode = 2 }
+        ShapeMenuItem { objectName: "deckAppearanceSystem"; text: qsTr("Follow system"); icon.source: "qrc:/qt/qml/Shape/Desktop/icons/monitor.svg"; icon.color: Theme.text; checkable: true; checked: window.preferences.appearanceMode === 0; onTriggered: window.preferences.appearanceMode = 0 }
+        ShapeMenuItem { objectName: "deckAppearanceLight"; text: qsTr("Light"); icon.source: "qrc:/qt/qml/Shape/Desktop/icons/sun.svg"; icon.color: Theme.text; checkable: true; checked: window.preferences.appearanceMode === 1; onTriggered: window.preferences.appearanceMode = 1 }
+        ShapeMenuItem { objectName: "deckAppearanceDark"; text: qsTr("Dark"); icon.source: "qrc:/qt/qml/Shape/Desktop/icons/moon.svg"; icon.color: Theme.text; checkable: true; checked: window.preferences.appearanceMode === 2; onTriggered: window.preferences.appearanceMode = 2 }
     }
-    Menu {
+    ShapeMenu {
         popupType: Popup.Item
         id: projectMenu; objectName: "deckProjectMenu"
-        MenuItem { objectName: "deckNewProject"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/add.svg"; icon.color: Theme.text; text: qsTr("New project…"); enabled: !window.exchange.active; onTriggered: { if (cards.flush()) { newName.text = ""; newProjectDialog.open() } } }
-        MenuItem { objectName: "deckOpenProject"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/open.svg"; icon.color: Theme.text; text: qsTr("Open project…"); enabled: !window.exchange.active; onTriggered: window.showProjects() }
-        MenuSeparator {}
-        MenuItem { objectName: "cardKitNew"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/add.svg"; icon.color: Theme.text; text: qsTr("New card set"); enabled: window.backend.projectOpen; onTriggered: cards.newKit() }
-        Menu {
+        ShapeMenuItem { objectName: "deckNewProject"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/add.svg"; icon.color: Theme.text; text: qsTr("New project…"); enabled: !window.exchange.active; onTriggered: { if (cards.flush()) { newName.text = ""; newProjectDialog.open() } } }
+        ShapeMenuItem { objectName: "deckOpenProject"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/open.svg"; icon.color: Theme.text; text: qsTr("Open project…"); enabled: !window.exchange.active; onTriggered: window.showProjects() }
+        ShapeMenuSeparator {}
+        ShapeMenuItem { objectName: "cardKitNew"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/add.svg"; icon.color: Theme.text; text: qsTr("New card set"); enabled: window.backend.projectOpen; onTriggered: cards.newKit() }
+        ShapeMenu {
         popupType: Popup.Item
             id: setsMenu; title: qsTr("Switch card set"); enabled: window.backend.projectOpen && cards.savedKits.length > 1
             Instantiator {
                 model: cards.savedKits.slice(1)
-                delegate: MenuItem { required property var modelData; text: modelData.name; checkable: true; checked: modelData.id === (window.cardKit.draft.artifact_id || ""); onTriggered: cards.selectKit(modelData.id) }
+                delegate: ShapeMenuItem { required property var modelData; text: modelData.name; checkable: true; checked: modelData.id === (window.cardKit.draft.artifact_id || ""); onTriggered: cards.selectKit(modelData.id) }
                 onObjectAdded: (index, object) => setsMenu.insertItem(index, object)
                 onObjectRemoved: (index, object) => setsMenu.removeItem(object)
             }
         }
-        MenuItem { text: qsTr("Card set name & defaults…"); enabled: window.backend.projectOpen; onTriggered: cards.openSetLayout() }
-        MenuSeparator {}
-        MenuItem { objectName: "deckSettings"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/settings.svg"; icon.color: Theme.text; text: qsTr("Settings…"); onTriggered: settingsDialog.open() }
+        ShapeMenuItem { text: qsTr("Card set name & defaults…"); enabled: window.backend.projectOpen; onTriggered: cards.openSetLayout() }
+        ShapeMenuSeparator {}
+        ShapeMenuItem { objectName: "deckSettings"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/settings.svg"; icon.color: Theme.text; text: qsTr("Settings…"); onTriggered: settingsDialog.open() }
     }
-    Menu {
+    ShapeMenu {
         popupType: Popup.Item
         id: moreMenu; objectName: "deckMoreMenu"
-        MenuItem { objectName: "cardKitExport"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/export.svg"; icon.color: Theme.text; text: qsTr("Export card files…"); enabled: !cards.dirty && window.cardKit.canExport; onTriggered: cards.exportAcceptedFiles() }
-        MenuSeparator {}
-        MenuItem { objectName: "cardKitAccept"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/verified.svg"; icon.color: Theme.text; text: qsTr("Save this version"); enabled: !window.cardKit.currentAccepted || cards.dirty; onTriggered: cards.saveVersion() }
-        MenuItem { objectName: "cardKitReview"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/search.svg"; icon.color: Theme.text; text: qsTr("Check cards"); onTriggered: if (cards.flush()) window.cardKit.review(cards.selectedCardId) }
-        MenuSeparator {}
-        MenuItem { objectName: "cardKitCopyDraft"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/duplicate.svg"; icon.color: Theme.text; text: qsTr("Copy complete draft"); onTriggered: window.cardKit.copyDraft(cards.composition) }
-        MenuItem { objectName: "cardKitReloadDraft"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/back.svg"; icon.color: Theme.text; text: qsTr("Reload saved draft…"); onTriggered: cards.requestReloadDraft() }
+        ShapeMenuItem { objectName: "cardKitExport"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/export.svg"; icon.color: Theme.text; text: qsTr("Export card files…"); enabled: !cards.dirty && window.cardKit.canExport; onTriggered: cards.exportAcceptedFiles() }
+        ShapeMenuSeparator {}
+        ShapeMenuItem { objectName: "cardKitAccept"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/verified.svg"; icon.color: Theme.text; text: qsTr("Save this version"); enabled: !window.cardKit.currentAccepted || cards.dirty; onTriggered: cards.saveVersion() }
+        ShapeMenuItem { objectName: "cardKitReview"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/search.svg"; icon.color: Theme.text; text: qsTr("Check cards"); onTriggered: if (cards.flush()) window.cardKit.review(cards.selectedCardId) }
+        ShapeMenuSeparator {}
+        ShapeMenuItem { objectName: "cardKitCopyDraft"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/duplicate.svg"; icon.color: Theme.text; text: qsTr("Copy complete draft"); onTriggered: window.cardKit.copyDraft(cards.composition) }
+        ShapeMenuItem { objectName: "cardKitReloadDraft"; icon.source: "qrc:/qt/qml/Shape/Desktop/icons/back.svg"; icon.color: Theme.text; text: qsTr("Reload saved draft…"); onTriggered: cards.requestReloadDraft() }
     }
     ColumnLayout {
         anchors.fill: parent; spacing: 0

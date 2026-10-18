@@ -890,8 +890,72 @@
             <translation>超出图片区域的边缘将被裁切，打印前请检查预览。</translation>
         </message>
         <message>
+            <source>Picture position</source>
+            <translation>图文结构</translation>
+        </message>
+        <message>
+            <source>Picture above text</source>
+            <translation>上图下文</translation>
+        </message>
+        <message>
+            <source>Picture below text</source>
+            <translation>上文下图</translation>
+        </message>
+        <message>
+            <source>Picture on the left</source>
+            <translation>左图右文</translation>
+        </message>
+        <message>
+            <source>Picture on the right</source>
+            <translation>左文右图</translation>
+        </message>
+        <message>
+            <source>Photo with caption panel</source>
+            <translation>照片与说明条</translation>
+        </message>
+        <message>
+            <source>Picture share (%)</source>
+            <translation>图片占比（%）</translation>
+        </message>
+        <message>
             <source>Text size (%)</source>
             <translation>文字大小（%）</translation>
+        </message>
+        <message>
+            <source>Text position…</source>
+            <translation>文字位置…</translation>
+        </message>
+        <message>
+            <source>Horizontal alignment</source>
+            <translation>水平对齐</translation>
+        </message>
+        <message>
+            <source>Vertical alignment</source>
+            <translation>垂直对齐</translation>
+        </message>
+        <message>
+            <source>Top</source>
+            <translation>顶部</translation>
+        </message>
+        <message>
+            <source>Bottom</source>
+            <translation>底部</translation>
+        </message>
+        <message>
+            <source>Horizontal offset (%)</source>
+            <translation>水平偏移（%）</translation>
+        </message>
+        <message>
+            <source>Vertical offset (%)</source>
+            <translation>垂直偏移（%）</translation>
+        </message>
+        <message>
+            <source>Offsets use the card width and height. Keep all text inside the card before printing.</source>
+            <translation>偏移按卡片宽高计算，打印前请确保文字仍在卡片内。</translation>
+        </message>
+        <message>
+            <source>Reset text position</source>
+            <translation>重置文字位置</translation>
         </message>
         <message>
             <source>Colors, border &amp; spacing</source>
@@ -912,10 +976,6 @@
         <message>
             <source>Show a border</source>
             <translation>显示边框</translation>
-        </message>
-        <message>
-            <source>Text alignment</source>
-            <translation>文字对齐</translation>
         </message>
         <message>
             <source>Left</source>
@@ -967,6 +1027,22 @@
         <message>
             <source>Framed picture</source>
             <translation>留白图文</translation>
+        </message>
+        <message>
+            <source>Text above picture</source>
+            <translation>上文下图</translation>
+        </message>
+        <message>
+            <source>Picture left</source>
+            <translation>左图右文</translation>
+        </message>
+        <message>
+            <source>Picture right</source>
+            <translation>左文右图</translation>
+        </message>
+        <message>
+            <source>Photo &amp; caption</source>
+            <translation>照片说明</translation>
         </message>
         <message>
             <source>Game card</source>

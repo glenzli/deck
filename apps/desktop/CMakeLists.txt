@@ -1,5 +1,7 @@
 find_package(Qt6 6.9 REQUIRED COMPONENTS Concurrent Multimedia Quick QuickControls2 Svg LinguistTools)
 find_package(Threads REQUIRED)
+execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/check_cardkit_source.py"
+    OUTPUT_QUIET COMMAND_ERROR_IS_FATAL ANY)
 qt_standard_project_setup(REQUIRES 6.9 I18N_TRANSLATED_LANGUAGES zh_CN)
 qt_policy(SET QTP0004 NEW)
 set(upstream "${DECK_SHAPE_SOURCE}/apps/desktop")
@@ -23,13 +25,14 @@ set(cargo_environment "${CMAKE_COMMAND}" -E env CARGO_BUILD_JOBS=2)
 if(APPLE)
     list(APPEND cargo_environment MACOSX_DEPLOYMENT_TARGET=26.0)
 endif()
+file(GLOB_RECURSE local_cardkit_inputs CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/third_party/shape-core/*" "${CMAKE_SOURCE_DIR}/third_party/shape-domain/*")
 file(GLOB_RECURSE rust_inputs CONFIGURE_DEPENDS "${DECK_SHAPE_SOURCE}/crates/*/src/*.rs" "${DECK_SHAPE_SOURCE}/crates/*/Cargo.toml" "${DECK_SHAPE_SOURCE}/crates/*/build.rs")
 add_custom_command(OUTPUT "${bridge_archive}"
     BYPRODUCTS "${bridge_include}/rust/cxx.h" "${bridge_include}/shape-desktop-bridge/src/lib.rs.h"
     COMMAND ${cargo_environment} "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/build_shape_bridge.py"
-        --source "${DECK_SHAPE_SOURCE}" --target "${bridge_target}" --include "${bridge_include}"
+        --source "${DECK_SHAPE_SOURCE}" --workspace-root "${CMAKE_SOURCE_DIR}" --target "${bridge_target}" --include "${bridge_include}"
         --cargo "${DECK_CARGO_EXECUTABLE}" ${release_argument}
-    DEPENDS ${rust_inputs} "${CMAKE_SOURCE_DIR}/scripts/build_shape_bridge.py" "${DECK_SHAPE_SOURCE}/Cargo.lock"
+    DEPENDS ${rust_inputs} ${local_cardkit_inputs} "${CMAKE_SOURCE_DIR}/Cargo.lock" "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/scripts/build_shape_bridge.py" "${DECK_SHAPE_SOURCE}/Cargo.lock"
     VERBATIM)
 add_custom_target(deck-rust-bridge-build DEPENDS "${bridge_archive}")
 add_library(deck-rust-bridge STATIC IMPORTED GLOBAL)
@@ -39,7 +42,7 @@ file(GLOB_RECURSE cli_inputs CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/apps/deck-cl
 add_custom_command(OUTPUT "${cli_binary}"
     COMMAND ${cargo_environment} "${DECK_CARGO_EXECUTABLE}" build --locked --manifest-path "${CMAKE_SOURCE_DIR}/Cargo.toml"
         -p deck-cli --target-dir "${cargo_target}" ${release_argument}
-    DEPENDS ${cli_inputs} "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
+    DEPENDS ${cli_inputs} ${local_cardkit_inputs} "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" VERBATIM)
 add_custom_target(deck-cli-build DEPENDS "${cli_binary}")
 qt_add_executable(deck-desktop
@@ -71,6 +74,7 @@ qt_add_qml_module(deck-desktop URI Shape.Desktop VERSION 1.0
         qml/components/ShapeComboBox.qml qml/components/ShapeDialog.qml
         qml/components/ShapeIcon.qml qml/components/ShapeIconButton.qml
         qml/components/ShapeSpinBox.qml qml/components/ShapeCheckBox.qml
+        qml/components/ShapeMenu.qml qml/components/ShapeMenuItem.qml qml/components/ShapeMenuSeparator.qml
         qml/components/CardLayoutPresets.qml qml/components/CardSheetPresets.qml
     RESOURCES ${icons})
 # Keep runtime/window branding and the macOS bundle on the same approved artwork.

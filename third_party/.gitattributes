@@ -1,0 +1,3 @@
+shape-core/** text eol=lf
+shape-domain/** text eol=lf
+shape-cardkit-provenance.json text eol=lf

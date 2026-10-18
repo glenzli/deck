@@ -5,7 +5,8 @@
 Deck brings card content, images, quantities and print layout into one dedicated workspace.
 Use complete card images, text-only cards, or images with text. Game-card fields are optional.
 It reuses [Shape](https://github.com/glenzli/shape)'s CardKit and Qt PDF implementation at a
-fixed source revision; no separate renderer or project database engine is introduced.
+fixed source revision, with the domain/core owners vendored for Deck layout extensions; no separate
+renderer or project database engine is introduced. See `third_party/shape-cardkit-provenance.json`.
 
 The first extraction is under active development. This repository is not a packaged public release.
 
@@ -14,8 +15,11 @@ The first extraction is under active development. This repository is not a packa
 Create or reopen a `.deck` project. Use **Add** to start from a blank card, images or a list.
 The card stays in the center while the right-hand **Content / Layout** inspector edits its text,
 images, quantities and layout. Extra fields fold away, and per-card layout can override the set
-defaults. Eight visual presets cover text, study notes, quotes, pictures, photos and framed or
-game-style cards. Card proportions are independent of the physical print size.
+defaults. Twelve visual presets cover text, study notes, quotes, pictures, photos and framed or
+game-style cards, including top/bottom and left/right picture-text arrangements and photo captions.
+Choose picture share, text alignment and horizontal/vertical offsets. Missing pictures show an
+explicit placeholder while preserving their layout space; they must be supplied before printing.
+Card proportions are independent of the physical print size.
 
 Drafts save automatically. **Accept and print** checks and adopts the current card version before
 opening the sheet preview; an already accepted version shows **Print**. Export an actual PDF with

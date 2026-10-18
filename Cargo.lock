@@ -1324,10 +1324,10 @@ dependencies = [
 [[package]]
 name = "shape-core"
 version = "0.1.0"
-source = "git+https://github.com/glenzli/shape.git?rev=983022bf35bcfda332ef57aeab81d8015cf5f280#983022bf35bcfda332ef57aeab81d8015cf5f280"
 dependencies = [
  "base64 0.22.1",
  "blake3",
+ "image",
  "rustix",
  "serde",
  "serde_json",
@@ -1358,7 +1358,6 @@ dependencies = [
 [[package]]
 name = "shape-domain"
 version = "0.1.0"
-source = "git+https://github.com/glenzli/shape.git?rev=983022bf35bcfda332ef57aeab81d8015cf5f280#983022bf35bcfda332ef57aeab81d8015cf5f280"
 dependencies = [
  "blake3",
  "serde",
