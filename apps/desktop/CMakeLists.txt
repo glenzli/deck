@@ -69,6 +69,18 @@ qt_add_qml_module(deck-desktop URI Shape.Desktop VERSION 1.0
         qml/components/ShapeComboBox.qml qml/components/ShapeDialog.qml
         qml/components/ShapeIcon.qml qml/components/ShapeIconButton.qml
     RESOURCES ${icons})
+# Keep runtime/window branding and the macOS bundle on the same approved artwork.
+qt_add_resources(deck-desktop deck-app-branding
+    PREFIX "/branding"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+    FILES assets/app-icon.png)
+if(APPLE)
+    set(DECK_APP_ICON_FILE "${CMAKE_CURRENT_SOURCE_DIR}/assets/app-icon.icns")
+    set_source_files_properties("${DECK_APP_ICON_FILE}" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+    target_sources(deck-desktop PRIVATE "${DECK_APP_ICON_FILE}")
+    set_target_properties(deck-desktop PROPERTIES MACOSX_BUNDLE_ICON_FILE "app-icon.icns")
+endif()
+
 qt_add_translations(deck-desktop TS_FILES translations/shape_zh_CN.ts RESOURCE_PREFIX "/translations"
     LUPDATE_OPTIONS -no-obsolete -locations none LRELEASE_OPTIONS -nounfinished)
 target_compile_features(deck-desktop PRIVATE cxx_std_20)

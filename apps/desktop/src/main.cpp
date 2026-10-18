@@ -15,6 +15,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QStandardPaths>
@@ -35,6 +36,7 @@ int main(int argc, char* argv[]) {
             && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
             qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
+    app.setWindowIcon(QIcon(QStringLiteral(":/branding/app-icon.png")));
     QCoreApplication::setOrganizationName("Glenzli");
     QCoreApplication::setApplicationName("Deck");
     QCoreApplication::setApplicationVersion("0.1.0");

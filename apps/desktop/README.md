@@ -70,3 +70,9 @@ reordering/removal, inline layout scopes, image-task and project menus, hidden t
 It also exercises late import and cancelled/unsupported Shape-probe guards.
 `DECK_SHADOW_BINARY` opts into the real isolated Shadow pipeline consumer; no user profile or
 inference credentials are used by the default smoke. Evidence is written outside the checkout.
+
+## Application icon
+
+[Icon assets and provenance](assets/README.md) own the selected imagegen artwork, exact source
+hashes and mechanical PNG/ICNS conversion commands. CMake embeds the PNG for Qt window branding
+and copies the matching ICNS into the macOS bundle; no developer-local image path is used at runtime.

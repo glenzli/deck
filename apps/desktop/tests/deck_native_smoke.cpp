@@ -16,6 +16,8 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
+#include <QGuiApplication>
+#include <QIcon>
 #include <QImage>
 #include <QJSValue>
 #include <QJsonArray>
@@ -164,6 +166,20 @@ bool deck_native_smoke::verify(
         require(QDir().mkpath(directory), "evidence directory");
         auto* window = qobject_cast<QQuickWindow*>(&root);
         require(window, "actual Deck window");
+        const QImage branding(QStringLiteral(":/branding/app-icon.png"));
+        require(
+            !branding.isNull() && branding.size() == QSize(1024, 1024)
+                && !QGuiApplication::windowIcon().isNull() && !window->icon().isNull(),
+            "approved application icon is packaged and assigned to the window"
+        );
+        for (const auto size : {16, 32, 64, 128}) {
+            const auto icon = QGuiApplication::windowIcon().pixmap(QSize(size, size));
+            require(
+                !icon.isNull()
+                    && icon.save(QDir(directory).filePath(QString("qt-app-icon-%1.png").arg(size))),
+                "Qt application icon resolves at small sizes"
+            );
+        }
         auto& workspace = child(root, "cardKitWorkspace");
         require(qobject_cast<QQuickItem*>(&workspace), "card editor is embedded Page");
         require(
@@ -779,6 +795,7 @@ bool deck_native_smoke::verify(
              {"cancelled_probe_fenced", true},
              {"shape_debug_alias_follows_promotion", true},
              {"calm_workbench_interactions", true},
+             {"application_icon_loaded", true},
              {"workbench_screenshots", uiEvidence}}
         );
         qInfo().noquote() << "Deck native smoke passed:" << directory;
