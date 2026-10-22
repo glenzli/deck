@@ -13,6 +13,7 @@
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDebug>
+#include <QDesktopServices>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QEventLoop>
@@ -25,13 +26,16 @@
 #include <QJsonDocument>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QProcess>
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQmlExpression>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QStandardPaths>
 #include <QSvgRenderer>
 #include <QTimer>
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <functional>
@@ -49,6 +53,40 @@ QString sha256(const QString& path) {
 void require(bool value, const char* message) {
     if (!value)
         throw std::runtime_error(message);
+}
+void verifyDashedCutGuides(const card_print::Document& document) {
+    auto isolated = document;
+    for (auto it = isolated.cards.begin(); it != isolated.cards.end(); ++it)
+        it.value() = QByteArrayLiteral(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'>"
+            "<rect width='100' height='100' fill='white'/></svg>"
+        );
+    const auto image = card_print::preview(isolated, 0);
+    int inkPixels = 0;
+    for (int y = 0; y < image.height(); ++y)
+        for (int x = 0; x < image.width(); ++x) {
+            const auto pixel = image.pixelColor(x, y);
+            require(pixel.red() >= 130, "cut guides remain light rather than solid black");
+            if (pixel.red() < 245)
+                ++inkPixels;
+        }
+    require(inkPixels > 100, "light cut guides are visible on paper");
+    const auto line = isolated.pages.first().crop_marks.first();
+    const auto scale = 1200. / std::max(document.sheet_mm.width(), document.sheet_mm.height());
+    const auto samples = int(line.length() * scale);
+    int drawn = 0, breaks = 0;
+    for (int i = 1; i < samples; ++i) {
+        const auto point = line.pointAt(double(i) / samples) * scale;
+        const auto pixel = image.pixelColor(
+            qBound(0, qRound(point.x()), image.width() - 1),
+            qBound(0, qRound(point.y()), image.height() - 1)
+        );
+        if (pixel.red() < 245)
+            ++drawn;
+        if (pixel.red() > 250)
+            ++breaks;
+    }
+    require(drawn > 2 && breaks > 2, "cut guides contain both dashes and paper breaks");
 }
 void settle(int milliseconds = 100) {
     QEventLoop loop;
@@ -300,6 +338,17 @@ bool deck_native_smoke::verify(
         preferences.setAppearanceMode(1);
         preferences.setLanguageMode("en");
         settle(150);
+        evaluate(root, "showProjects()");
+        require(
+            !documents.openLocalProject(QDir(directory).filePath("missing.deck"))
+                && child(root, "deckProjectOpenError").property("visible").toBool()
+                && !child(root, "deckProjectOpenError").property("text").toString().isEmpty(),
+            "project-open failures are visible inside the active project picker"
+        );
+        evaluate(child(root, "deckProjectsDialog"), "close()");
+        evaluate(root, "showProjects()");
+        require(documents.error().isEmpty(), "a fresh project attempt clears the old error");
+        evaluate(child(root, "deckProjectsDialog"), "close()");
         require(
             child(root, "cardKitPrint").property("text").toString().isEmpty()
                 && child(root, "cardKitPrint").property("toolTipText").toString()
@@ -672,12 +721,56 @@ bool deck_native_smoke::verify(
                 && printing.plan().value("total_copies").toInt() == 12,
             "12 copies create full and partial pages"
         );
+        auto& printDialog = child(root, "cardPrintDialog");
+        const auto tightOptions = printing.plan().value("options").toMap();
+        require(
+            tightOptions.value("cut_line_style").toString() == "dashed_grid"
+                && std::abs(tightOptions.value("gap_mm").toDouble() - 0.2) < 0.0001
+                && tightOptions.value("gap_mm") == tightOptions.value("stroke_width_mm"),
+            "default sheet uses a single line-width gap and shared dashed cut guides"
+        );
+        auto& marginControl = child(root, "cardPrint-margin_mm");
+        require(
+            marginControl.property("visible").toBool()
+                && !printDialog.property("advanced").toBool(),
+            "paper margin is available without opening fine adjustments"
+        );
+        marginControl.setProperty("value", 120);
+        require(QMetaObject::invokeMethod(&marginControl, "valueModified"), "edit paper margin");
+        settle(240);
+        const auto insetOptions = printing.plan().value("options").toMap();
+        require(
+            printing.ready() && insetOptions.value("margin_mm").toDouble() == 12.0
+                && insetOptions.value("card_height_mm").toDouble()
+                       < tightOptions.value("card_height_mm").toDouble(),
+            "increasing the paper margin recomputes the physical card grid"
+        );
+        evaluate(printDialog, "contentMode = 1; chooseGrid(2,3); closeLayout()");
+        settle(100);
+        click(*window, child(root, "cardKitPrint"));
+        require(
+            printing.ready()
+                && printing.plan().value("options").toMap().value("margin_mm").toDouble() == 12.0
+                && printing.plan().value("columns").toInt() == 2
+                && printing.plan().value("rows").toInt() == 3
+                && printing.plan().value("total_copies").toInt() == 3,
+            "returning to cards before the refresh timer fires preserves sheet choices"
+        );
+        require(evaluate(printDialog, "resetLayout()").toBool(), "reset saved sheet choices");
+        require(
+            printing.plan().value("options").toMap().value("margin_mm").toDouble() == 5.0
+                && printing.plan().value("columns").toInt() == 3
+                && printing.plan().value("total_copies").toInt() == 12,
+            "reset restores the default layout and authored quantities"
+        );
         const auto planRequestPath = QDir(directory).filePath("print-plan-request.json");
         write(
             planRequestPath,
             {{"action", "print_plan"},
              {"source", QJsonObject::fromVariantMap(source)},
-             {"options", QJsonObject::fromVariantMap(printing.plan().value("options").toMap())}}
+             {"options", QJsonObject::fromVariantMap(printing.plan().value("options").toMap())},
+             {"imposition",
+              QJsonObject::fromVariantMap(printing.plan().value("imposition").toMap())}}
         );
         const auto fullPlan =
             documents.cli().run({"card-kit", project, planRequestPath})["print_plan"].toObject();
@@ -687,6 +780,7 @@ bool deck_native_smoke::verify(
         );
         write(QDir(directory).filePath("print-plan.json"), fullPlan);
         const auto plan = card_print::prepare(fullPlan);
+        verifyDashedCutGuides(*plan);
         require(
             card_print::preview(*plan, 0).save(QDir(directory).filePath("print-page-1.png"))
                 && card_print::preview(*plan, 1).save(QDir(directory).filePath("print-page-2.png")),
@@ -696,7 +790,6 @@ bool deck_native_smoke::verify(
             window->grabWindow().save(QDir(directory).filePath("deck-print-en-1120.png")),
             "print layout actual window"
         );
-        auto& printDialog = child(root, "cardPrintDialog");
         const auto previousPlanVersion = printing.version();
         click(*window, child(root, "cardSheetPreset-2x3"));
         settle(240);
@@ -728,6 +821,69 @@ bool deck_native_smoke::verify(
                 && wait([&] { return !printing.running(); }) && printing.error().isEmpty(),
             "mixed-card sheet exports through the same native PDF writer"
         );
+        {
+            PdfOpenProbe probe;
+            QDesktopServices::setUrlHandler("file", &probe, "open");
+            struct ResetPdfHandler {
+                ~ResetPdfHandler() {
+                    QDesktopServices::unsetUrlHandler("file");
+                }
+            } resetHandler;
+            require(
+                printing.exportedPdf() == QUrl::fromLocalFile(mixedPdf)
+                    && child(root, "cardPrintOpenPdf").property("visible").toBool(),
+                "successful export exposes the exact PDF and open action"
+            );
+            click(*window, child(root, "cardPrintOpenPdf"));
+            require(
+                probe.opened == QUrl::fromLocalFile(mixedPdf),
+                "open action hands the exact PDF to its reader"
+            );
+            probe.opened.clear();
+            const auto movedPdf = QDir(directory).filePath("mixed-moved.pdf");
+            require(QFile::rename(mixedPdf, movedPdf), "move the temporary exported PDF");
+            require(
+                !printing.openExportedPdf() && probe.opened.isEmpty(),
+                "missing PDF cannot open a stale destination"
+            );
+            require(QFile::rename(movedPdf, mixedPdf), "restore the temporary PDF fixture");
+        }
+        {
+            const auto folder = QUrl::fromLocalFile(directory);
+            const auto suggestion = printing.suggestedPdfDestination(folder);
+            const QFileInfo proposed(suggestion.toLocalFile());
+            require(
+                suggestion.isLocalFile()
+                    && proposed.dir().canonicalPath() == QFileInfo(directory).canonicalFilePath()
+                    && proposed.fileName().endsWith(".pdf") && !proposed.exists(),
+                "PDF suggestion uses a fresh name in the chosen output folder"
+            );
+            QFile existing(suggestion.toLocalFile());
+            require(
+                existing.open(QIODevice::WriteOnly) && existing.write("existing export") == 15,
+                "create a prior filename fixture"
+            );
+            existing.close();
+            const auto next = printing.suggestedPdfDestination(folder);
+            require(
+                next != suggestion && QFileInfo(next.toLocalFile()).fileName().endsWith(" (2).pdf")
+                    && existing.size() == 15,
+                "repeated export suggests a numbered filename without altering the existing file"
+            );
+            const auto fallback = printing.suggestedPdfDestination(QUrl::fromLocalFile(project));
+            require(
+                fallback.isEmpty()
+                    || (QFileInfo(fallback.toLocalFile()).dir().canonicalPath()
+                            == QFileInfo(
+                                   QStandardPaths::writableLocation(
+                                       QStandardPaths::DocumentsLocation
+                                   )
+                            )
+                                   .canonicalFilePath()
+                        && !fallback.toLocalFile().startsWith(project + "/")),
+                "project bundles are never suggested as PDF destinations"
+            );
+        }
         evaluate(
             printDialog,
             "contentMode = 2; selectedCardId = 'landscape'; fillSheet = true; refresh()"
@@ -735,6 +891,11 @@ bool deck_native_smoke::verify(
         require(
             printing.ready() && printing.plan().value("total_copies").toInt() == 6,
             "one selected card repeats across the complete six-up sheet"
+        );
+        require(
+            printing.exportedPdf().isEmpty()
+                && !child(root, "cardPrintOpenPdf").property("visible").toBool(),
+            "changing the sheet clears the old PDF open action"
         );
         auto* gridNumber = qobject_cast<QQuickItem*>(&child(root, "cardPrintColumns"));
         auto* fillCheck = qobject_cast<QQuickItem*>(&child(root, "cardPrintFillSheet"));
@@ -787,6 +948,10 @@ bool deck_native_smoke::verify(
             "repeated export settles"
         );
         require(!printing.error().isEmpty(), "existing PDF is never overwritten");
+        require(
+            printing.exportedPdf().isEmpty(),
+            "failed export cannot retain a successful PDF action"
+        );
         const auto pdfRequest = QDir(directory).filePath("pdf-request.json");
         write(
             pdfRequest,
@@ -820,6 +985,149 @@ bool deck_native_smoke::verify(
             QJsonObject::fromVariantMap(cards.draft().value("composition").toMap()) == composition,
             "full card data persists after reopen"
         );
+        {
+            require(cards.beginNew(), "separate selected-print regression kit");
+            const QJsonObject selectedComposition{
+                {"name", "Selected copy regression"},
+                {"layout", QJsonObject{{"mode", "text"}}},
+                {"cards",
+                 QJsonArray{
+                     QJsonObject{{"id", "many"}, {"title", "Many"}, {"quantity", 300}},
+                     QJsonObject{{"id", "one"}, {"title", "One"}, {"quantity", 1}}
+                 }}
+            };
+            require(
+                cards.save(selectedComposition.toVariantMap()) && cards.review("one")
+                    && cards.accept(),
+                "accept selected-print regression cards"
+            );
+            const auto selectedSource = cards.source();
+            const QVariantMap each{{"columns", 1}, {"rows", 1}, {"content", "one_each"}};
+            require(
+                printing.prepare(selectedSource, {}, each)
+                    && printing.plan().value("page_count").toInt() == 2,
+                "one-each ignores the authored 300-copy quantity in the native consumer"
+            );
+            const QVariantMap repeated{
+                {"columns", 1},
+                {"rows", 1},
+                {"content", "repeat"},
+                {"card_id", "one"},
+                {"copies", 1}
+            };
+            require(
+                printing.prepare(selectedSource, {}, repeated)
+                    && printing.plan().value("total_copies").toInt() == 1,
+                "one selected copy prepares through the packaged CLI"
+            );
+            const auto selectedPdf = QDir(directory).filePath("selected-copy-native.pdf");
+            require(
+                printing.exportPdf(QUrl::fromLocalFile(selectedPdf), printing.version())
+                    && wait([&] { return !printing.running(); }) && printing.error().isEmpty()
+                    && QFileInfo(selectedPdf).size() > 1000,
+                "selected copy exports a real native PDF"
+            );
+            require(
+                !printing.prepare(selectedSource, {}, {{"columns", 1}, {"rows", 1}}),
+                "authored quantities still enforce the physical page limit"
+            );
+            require(
+                cards.source() == selectedSource
+                    && cards.draft()
+                               .value("composition")
+                               .toMap()
+                               .value("cards")
+                               .toList()
+                               .first()
+                               .toMap()
+                               .value("quantity")
+                               .toInt()
+                           == 300,
+                "selected printing never rewrites authored quantities or accepted identity"
+            );
+            const auto openCurrentSheet = [&] {
+                const auto sourceJson =
+                    QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(cards.source()))
+                                          .toJson(QJsonDocument::Compact));
+                const auto cardsJson = QString::fromUtf8(
+                    QJsonDocument(
+                        QJsonArray::fromVariantList(
+                            cards.draft().value("composition").toMap().value("cards").toList()
+                        )
+                    )
+                        .toJson(QJsonDocument::Compact)
+                );
+                return evaluate(
+                           printDialog,
+                           "openForSource(" + sourceJson + ", {}, " + cardsJson + ", 'many')"
+                )
+                    .toBool();
+            };
+            require(openCurrentSheet(), "open a different card set in the layout dialog");
+            require(
+                printDialog.property("gridColumns").toInt() == 3
+                    && printDialog.property("contentMode").toInt() == 0,
+                "new card sets receive their own default layout"
+            );
+            evaluate(
+                printDialog,
+                "keepProportions = false; setOption('card_width_mm', 50); "
+                "setOption('card_height_mm', 70); "
+                "setOption('margin_mm', 8); setOption('stroke_width_mm', 0.4); "
+                "contentMode = 2; selectedCardId = 'one'; fillSheet = false; repeatCopies = 5; "
+                "closeLayout()"
+            );
+            settle(100);
+            auto changed = selectedComposition;
+            changed["name"] = QString::fromUtf8("更新 / Cards: title");
+            changed["cards"] =
+                QJsonArray{QJsonObject{{"id", "many"}, {"title", "Updated"}, {"quantity", 300}}};
+            require(
+                cards.save(changed.toVariantMap()) && cards.review("many") && cards.accept(),
+                "accept revised card content with the old repeat selection removed"
+            );
+            require(
+                cards.source() != selectedSource && openCurrentSheet(),
+                "reopen layout after accepting a new card version"
+            );
+            const auto restoredOptions = printing.plan().value("options").toMap();
+            require(
+                printing.plan().value("source").toMap() == cards.source()
+                    && printing.plan().value("name").toString()
+                           == QString::fromUtf8("更新 / Cards: title")
+                    && printDialog.property("selectedCardId").toString() == "many"
+                    && printing.plan().value("total_copies").toInt() == 5
+                    && restoredOptions.value("card_width_mm").toDouble() == 50.0
+                    && restoredOptions.value("card_height_mm").toDouble() == 70.0
+                    && restoredOptions.value("margin_mm").toDouble() == 8.0
+                    && restoredOptions.value("stroke_width_mm").toDouble() == 0.4,
+                "session layout follows the latest accepted content and safely replaces a removed "
+                "repeat card"
+            );
+            const auto safeName =
+                QFileInfo(
+                    printing.suggestedPdfDestination(QUrl::fromLocalFile(directory)).toLocalFile()
+                )
+                    .fileName();
+            require(
+                safeName.startsWith(QString::fromUtf8("更新")) && !safeName.contains('/')
+                    && !safeName.contains(':'),
+                "suggested PDF names retain Chinese while removing path and filename separators"
+            );
+            evaluate(printDialog, "closeLayout()");
+            settle(100);
+            require(cards.load(kit), "restore original kit after selected-print regression");
+            click(*window, child(root, "cardKitPrint"));
+            require(
+                printing.ready() && printDialog.property("gridColumns").toInt() == 3
+                    && printDialog.property("contentMode").toInt() == 0
+                    && printing.plan().value("options").toMap().value("margin_mm").toDouble()
+                           == 5.0,
+                "switching back to the original card set restores its own layout"
+            );
+            evaluate(printDialog, "closeLayout()");
+            settle(100);
+        }
         const auto exchangeSettings = QDir(directory).filePath("exchange-settings.ini");
         const auto externalRequest = QDir(directory).filePath("external-request.json");
         const auto externalResult = QDir(directory).filePath("external-result.json");
@@ -978,6 +1286,47 @@ bool deck_native_smoke::verify(
             click(*window, child(root, "cardArtworkBack"));
         }
 #ifdef Q_OS_UNIX
+        {
+            const auto taskRoot = QDir(directory).filePath("restored-image-task");
+            require(QDir().mkpath(taskRoot), "restored task fixture directory");
+            const auto request = QDir(taskRoot).filePath("request.json");
+            write(request, {{"schema", "deck.material-task/1"}, {"request_id", "restored-task"}});
+            QProcess external;
+            external.start("/bin/sleep", {"10"});
+            require(external.waitForStarted(1000), "real external-process fixture starts");
+            const auto taskSettings = QDir(taskRoot).filePath("task.ini");
+            QSettings stored(taskSettings, QSettings::IniFormat);
+            const QJsonObject record{
+                {"request", request},
+                {"result", QDir(taskRoot).filePath("result.json")},
+                {"digest", documents.cli().hashFile(request)["blake3"]},
+                {"project", project},
+                {"executable", "/bin/sleep"},
+                {"pid", external.processId()},
+                {"waiting", true}
+            };
+            stored.setValue(
+                "deck/material_task",
+                QJsonDocument(record).toJson(QJsonDocument::Compact)
+            );
+            stored.sync();
+            ExternalImageTaskController resumed(backend, cards, documents, taskSettings);
+            require(resumed.running(), "restored controller resumes a live external process");
+            external.terminate();
+            require(external.waitForFinished(1000), "external process exits without a result");
+            require(
+                wait([&] { return !resumed.running(); }, 2000) && !resumed.error().isEmpty()
+                    && !resumed.resultReady(),
+                "restored task stops waiting when its process exits without returning"
+            );
+            stored.sync();
+            require(
+                !QJsonDocument::fromJson(stored.value("deck/material_task").toByteArray())
+                     .object()["waiting"]
+                     .toBool(),
+                "terminal restored-task state is persisted"
+            );
+        }
         {
             const auto aliasRoot = QDir(directory).filePath("shape-debug-alias");
             const auto alias = QDir(aliasRoot).filePath("current-debug");
@@ -1168,6 +1517,63 @@ bool deck_native_smoke::verify(
                 && !cards.currentAccepted(),
             "AI suggestions append a draft without accepting a version"
         );
+        {
+            const auto before = cards.draft().value("composition").toMap();
+            evaluate(
+                workspace,
+                "setField('layout', Object.assign({}, composition.layout, {mode:'image'})); "
+                "flush(); openCardList()"
+            );
+            const auto imageComposition = cards.draft().value("composition").toMap();
+            child(root, "cardKitListText")
+                .setProperty(
+                    "text",
+                    QString::fromUtf8("月亮\t今晚抬头看一眼月亮。\n引力\t让小球落向桌面。")
+                );
+            require(
+                evaluate(workspace, "appendCardList()").toBool(),
+                "text list saves into an image-default kit"
+            );
+            const auto after = cards.draft().value("composition").toMap();
+            auto originalCards = after.value("cards").toList();
+            originalCards.removeLast();
+            originalCards.removeLast();
+            require(
+                originalCards == imageComposition.value("cards").toList()
+                    && after.value("layout") == imageComposition.value("layout")
+                    && cards.review(workspace.property("selectedCardId").toString())
+                    && cards.preview().value("svg").toString().contains(QString::fromUtf8("月亮"))
+                    && !cards.preview().value("svg").toString().contains("image-placeholder"),
+                "list cards show text while existing cards and image defaults remain intact"
+            );
+            require(
+                evaluate(
+                    workspace,
+                    "CardListImport.parse('Moon\\u0085light', composition, false).error === "
+                    "'invalid_text'"
+                )
+                    .toBool(),
+                "C1 control text is rejected before adding cards"
+            );
+            auto legacy = before;
+            legacy.remove("layout");
+            auto legacyCards = legacy.value("cards").toList();
+            for (auto& item : legacyCards) {
+                auto card = item.toMap();
+                card.remove("layout");
+                item = card;
+            }
+            legacy["cards"] = legacyCards;
+            require(cards.save(legacy), "legacy layout regression draft");
+            const auto legacyDraft = cards.draft();
+            require(
+                !evaluate(workspace, "openAssistant()").toBool() && cards.draft() == legacyDraft
+                    && workspace.property("layoutForSet").toBool(),
+                "AI on legacy cards requests an explicit layout choice without altering content"
+            );
+            require(cards.save(before), "restore original cards after intake regressions");
+            evaluate(workspace, "inspectorTab = 0; layoutForSet = false");
+        }
         evaluate(workspace, "setCardField(\"rules\", \"Unfinished observation\")");
         click(*window, child(root, "deckAppearanceButton"));
         click(*window, child(root, "deckAppearanceDark"));
@@ -1224,6 +1630,20 @@ bool deck_native_smoke::verify(
              {"integrated_titlebar_safe_at_980", true},
              {"assistant_stale_candidate_fenced", true},
              {"assistant_cancel_before_start_acknowledgement", true},
+             {"project_open_error_in_active_dialog", true},
+             {"selected_copy_print_native_pdf", true},
+             {"restored_image_task_exit_detected", true},
+             {"image_default_text_list_visible", true},
+             {"legacy_assistant_layout_preserved", true},
+             {"control_character_intake_rejected", true},
+             {"tight_shared_dashed_cut_guides", true},
+             {"paper_margin_directly_adjustable", true},
+             {"sheet_session_choices_retained", true},
+             {"sheet_session_follows_new_card_revision", true},
+             {"sheet_session_card_set_isolation", true},
+             {"pdf_filename_collision_suggestion", true},
+             {"pdf_open_exact_successful_destination", true},
+             {"pdf_missing_or_stale_destination_rejected", true},
              {"workbench_screenshots", uiEvidence}}
         );
         qInfo().noquote() << "Deck native smoke passed:" << directory;

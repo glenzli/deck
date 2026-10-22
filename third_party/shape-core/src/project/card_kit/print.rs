@@ -2,6 +2,7 @@
 //! Print settings never enter an accepted composition or create a new artifact revision.
 use serde::{Deserialize, Serialize};
 use shape_domain::{ArtifactContentContract, ArtifactRevision, CardKitRequest, WorkingInput};
+use std::collections::BTreeMap;
 
 mod options;
 pub use options::CardPrintRequestOptions;
@@ -70,11 +71,20 @@ pub enum CardPrintPaper {
     Letter,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CardPrintCutLineStyle {
+    #[default]
+    CornerMarks,
+    DashedGrid,
+}
+
 /// Transient export settings, in millimetres with at most three decimal places.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CardPrintOptions {
     pub paper: CardPrintPaper,
+    pub cut_line_style: CardPrintCutLineStyle,
     pub card_width_mm: f64,
     pub card_height_mm: f64,
     pub margin_mm: f64,
@@ -88,6 +98,7 @@ impl Default for CardPrintOptions {
     fn default() -> Self {
         Self {
             paper: CardPrintPaper::A4,
+            cut_line_style: CardPrintCutLineStyle::CornerMarks,
             card_width_mm: 63.0,
             card_height_mm: 88.0,
             margin_mm: 5.0,
@@ -161,6 +172,56 @@ pub struct CardPrintPlan {
     pub duplex: bool,
 }
 
+impl CardPrintPlan {
+    /// Rearranges admitted faces using the same physical grid and cut-line owner as automatic plans.
+    /// No card is rendered again, and the accepted source and authored quantities remain unchanged.
+    /// # Errors
+    /// Rejects unknown or duplicate copy identities and grids outside the paper or job bounds.
+    pub fn impose_grid(
+        &mut self,
+        columns: usize,
+        rows: usize,
+        copies: &[(String, u16)],
+    ) -> Result<(), CardKitError> {
+        let layout = Layout::with_grid(&self.options, copies.len(), Some((columns, rows)))?;
+        let mut identities = std::collections::BTreeSet::new();
+        for (id, index) in copies {
+            if *index == 0
+                || !self.cards.iter().any(|card| card.id == *id)
+                || !identities.insert((id, index))
+            {
+                return Err(print_invalid(
+                    "card_print.selection",
+                    "select unique admitted card copies",
+                ));
+            }
+        }
+        let template = self
+            .pages
+            .first()
+            .and_then(|page| page.slots.first())
+            .ok_or_else(|| {
+                print_invalid(
+                    "card_print.layout",
+                    "print layout is missing an admitted card face",
+                )
+            })?;
+        let canvas = (
+            template.content_rect_mm.width,
+            template.content_rect_mm.height,
+        );
+        self.pages = layout.pages(copies, canvas);
+        self.cards
+            .retain(|card| copies.iter().any(|(id, _)| card.id == *id));
+        self.columns = layout.columns;
+        self.rows = layout.rows;
+        self.slots_per_page = layout.capacity;
+        self.total_copies = copies.len();
+        self.page_count = self.pages.len();
+        Ok(())
+    }
+}
+
 impl ShapeProject {
     /// Plans one accepted historical kit without changing its draft, head or material pins.
     /// Quantity, geometry and resource bounds are admitted before reading material bytes.
@@ -172,7 +233,7 @@ impl ShapeProject {
         options: &CardPrintOptions,
     ) -> Result<CardPrintPlan, CardKitError> {
         let request = self.read_card_kit(source)?;
-        self.plan_card_print_composition(source, request, options)
+        self.plan_card_print_composition(source, request, options, None)
     }
 
     /// Resolves omitted axes proportionally from this accepted face, then admits one print plan.
@@ -185,7 +246,40 @@ impl ShapeProject {
     ) -> Result<CardPrintPlan, CardKitError> {
         let request = self.read_card_kit(source)?;
         let resolved = options.resolve(&request)?;
-        self.plan_card_print_composition(source, request, &resolved)
+        self.plan_card_print_composition(source, request, &resolved, None)
+    }
+
+    /// Plans transient copy counts for selected faces of an exact accepted kit.
+    /// Unselected materials and faces are not loaded or rendered; authored quantities stay intact.
+    /// # Errors
+    /// Rejects empty, duplicate or unknown card selections and the same bounds as a complete job.
+    pub fn plan_card_print_selection_request(
+        &self,
+        source: WorkingInput,
+        options: &CardPrintRequestOptions,
+        selection: &[(String, u16)],
+    ) -> Result<CardPrintPlan, CardKitError> {
+        let mut request = self.read_card_kit(source)?;
+        let mut quantities = BTreeMap::new();
+        for (id, quantity) in selection {
+            if *quantity == 0 || quantities.insert(id.as_str(), *quantity).is_some() {
+                return Err(print_invalid(
+                    "card_print.selection",
+                    "select unique accepted cards with positive copy counts",
+                ));
+            }
+        }
+        request
+            .cards
+            .retain(|card| quantities.contains_key(card.id.as_str()));
+        if selection.is_empty() || request.cards.len() != selection.len() {
+            return Err(print_invalid(
+                "card_print.selection",
+                "select cards from this accepted version",
+            ));
+        }
+        let resolved = options.resolve(&request)?;
+        self.plan_card_print_composition(source, request, &resolved, Some(&quantities))
     }
 
     fn plan_card_print_composition(
@@ -193,8 +287,19 @@ impl ShapeProject {
         source: WorkingInput,
         request: CardKitRequest,
         options: &CardPrintOptions,
+        quantities: Option<&BTreeMap<&str, u16>>,
     ) -> Result<CardPrintPlan, CardKitError> {
-        let total_copies = request.cards.iter().map(|c| usize::from(c.quantity)).sum();
+        let quantity = |id: &str, authored| {
+            quantities
+                .and_then(|counts| counts.get(id))
+                .copied()
+                .unwrap_or(authored)
+        };
+        let total_copies = request
+            .cards
+            .iter()
+            .map(|c| usize::from(quantity(&c.id, c.quantity)))
+            .sum();
         let layout = Layout::new(options, total_copies)?;
         let mut artwork_budget = ArtworkBudget::default();
         for pin in request
@@ -226,30 +331,13 @@ impl ShapeProject {
                 })
             })
             .collect::<Result<_, CardKitError>>()?;
-        let mut pages = Vec::<CardPrintPage>::with_capacity(layout.page_count);
-        let mut index = 0;
+        let mut copies = Vec::with_capacity(total_copies);
         for card in &request.cards {
-            for copy_index in 1..=card.quantity {
-                if index % layout.capacity == 0 {
-                    pages.push(CardPrintPage {
-                        index: pages.len(),
-                        slots: Vec::with_capacity(layout.capacity.min(total_copies - index)),
-                        crop_marks: Vec::new(),
-                    });
-                }
-                let (slot, marks) =
-                    layout.slot(index % layout.capacity, &card.id, copy_index, canvas);
-                let page = pages.last_mut().ok_or_else(|| {
-                    print_invalid(
-                        "card_print.layout",
-                        "print layout is missing an admitted page",
-                    )
-                })?;
-                page.slots.push(slot);
-                page.crop_marks.extend(marks);
-                index += 1;
+            for copy_index in 1..=quantity(&card.id, card.quantity) {
+                copies.push((card.id.clone(), copy_index));
             }
         }
+        let pages = layout.pages(&copies, canvas);
         Ok(CardPrintPlan {
             schema: "shape.card-print-plan/1",
             source,
@@ -292,10 +380,19 @@ struct Layout {
     rows: usize,
     capacity: usize,
     page_count: usize,
+    cut_line_style: CardPrintCutLineStyle,
 }
 
 impl Layout {
     fn new(options: &CardPrintOptions, copies: usize) -> Result<Self, CardKitError> {
+        Self::with_grid(options, copies, None)
+    }
+
+    fn with_grid(
+        options: &CardPrintOptions,
+        copies: usize,
+        grid: Option<(usize, usize)>,
+    ) -> Result<Self, CardKitError> {
         if !(1..=MAX_COPIES).contains(&copies) {
             return Err(print_invalid(
                 "card_print.quantity_limit",
@@ -313,16 +410,28 @@ impl Layout {
         let offset = micrometres(options.crop_mark_offset_mm, 0.0, 10.0)?;
         let length = micrometres(options.crop_mark_length_mm, 0.1, 10.0)?;
         let stroke = micrometres(options.stroke_width_mm, 0.05, 0.5)?;
-        let half_stroke = (stroke + 1) / 2;
-        let extent = offset + length + half_stroke;
-        if offset < half_stroke || gap < extent {
-            return Err(print_invalid(
-                "card_print.crop_clearance",
-                "crop offset must clear half the stroke; gap must contain offset, mark length and half the stroke",
-            ));
-        }
-        let columns = (sheet_width - 2 * margin - 2 * extent + gap) / (width + gap);
-        let rows = (sheet_height - 2 * margin - 2 * extent + gap) / (height + gap);
+        let extent = cut_line_extent(options.cut_line_style, gap, offset, length, stroke)?;
+        let available_columns = (sheet_width - 2 * margin - 2 * extent + gap) / (width + gap);
+        let available_rows = (sheet_height - 2 * margin - 2 * extent + gap) / (height + gap);
+        let (columns, rows) = if let Some((columns, rows)) = grid {
+            if columns == 0 || rows == 0 || columns.saturating_mul(rows) > MAX_SLOTS_PER_PAGE {
+                return Err(print_invalid(
+                    "card_print.slot_limit",
+                    "choose a bounded positive print grid",
+                ));
+            }
+            let columns = i32::try_from(columns).expect("bounded print grid");
+            let rows = i32::try_from(rows).expect("bounded print grid");
+            if columns > available_columns || rows > available_rows {
+                return Err(print_invalid(
+                    "card_print.paper_fit",
+                    "selected grid and complete cut lines do not fit inside the paper margins",
+                ));
+            }
+            (columns, rows)
+        } else {
+            (available_columns, available_rows)
+        };
         if columns < 1 || rows < 1 {
             return Err(print_invalid(
                 "card_print.paper_fit",
@@ -359,7 +468,86 @@ impl Layout {
             rows: usize::try_from(rows).expect("positive bounded rows"),
             capacity,
             page_count,
+            cut_line_style: options.cut_line_style,
         })
+    }
+
+    fn pages(&self, copies: &[(String, u16)], canvas: (f64, f64)) -> Vec<CardPrintPage> {
+        copies
+            .chunks(self.capacity)
+            .enumerate()
+            .map(|(index, copies)| {
+                let mut page = CardPrintPage {
+                    index,
+                    slots: Vec::with_capacity(copies.len()),
+                    crop_marks: Vec::new(),
+                };
+                for (index, (id, copy_index)) in copies.iter().enumerate() {
+                    let (slot, marks) = self.slot(index, id, *copy_index, canvas);
+                    page.slots.push(slot);
+                    page.crop_marks.extend(marks);
+                }
+                if self.cut_line_style == CardPrintCutLineStyle::DashedGrid {
+                    page.crop_marks = self.shared_cut_lines(page.slots.len());
+                }
+                page
+            })
+            .collect()
+    }
+
+    fn shared_cut_lines(&self, occupied: usize) -> Vec<CardPrintLine> {
+        // Doubled micrometres preserve half-gap centres for odd micrometre measurements.
+        let mut vertical = BTreeMap::<i32, Vec<(i32, i32)>>::new();
+        let mut horizontal = BTreeMap::<i32, Vec<(i32, i32)>>::new();
+        for index in 0..occupied {
+            let column = i32::try_from(index % self.columns).expect("admitted column");
+            let row = i32::try_from(index / self.columns).expect("admitted row");
+            let x = self.origin_x + column * (self.width + self.gap);
+            let y = self.origin_y + row * (self.height + self.gap);
+            let left = 2 * x - self.gap;
+            let right = 2 * (x + self.width) + self.gap;
+            let top = 2 * y - self.gap;
+            let bottom = 2 * (y + self.height) + self.gap;
+            vertical.entry(left).or_default().push((top, bottom));
+            vertical.entry(right).or_default().push((top, bottom));
+            horizontal.entry(top).or_default().push((left, right));
+            horizontal.entry(bottom).or_default().push((left, right));
+        }
+        let mut lines = Vec::new();
+        for (vertical, groups) in [(true, vertical), (false, horizontal)] {
+            for (coordinate, mut intervals) in groups {
+                intervals.sort_unstable();
+                let mut merged = Vec::<(i32, i32)>::new();
+                for (start, end) in intervals {
+                    if let Some(last) = merged.last_mut().filter(|last| start <= last.1) {
+                        last.1 = last.1.max(end);
+                    } else {
+                        merged.push((start, end));
+                    }
+                }
+                for (start, end) in merged {
+                    let coordinate = f64::from(coordinate) / 2000.0;
+                    let start = f64::from(start) / 2000.0;
+                    let end = f64::from(end) / 2000.0;
+                    lines.push(if vertical {
+                        CardPrintLine {
+                            x1: coordinate,
+                            y1: start,
+                            x2: coordinate,
+                            y2: end,
+                        }
+                    } else {
+                        CardPrintLine {
+                            x1: start,
+                            y1: coordinate,
+                            x2: end,
+                            y2: coordinate,
+                        }
+                    });
+                }
+            }
+        }
+        lines
     }
 
     fn slot(
@@ -387,20 +575,22 @@ impl Layout {
             height: canvas.1 * scale,
         };
         let mut marks = Vec::with_capacity(8);
-        for (corner_x, direction_x) in [(x, -1), (x + self.width, 1)] {
-            for (corner_y, direction_y) in [(y, -1), (y + self.height, 1)] {
-                marks.push(CardPrintLine {
-                    x1: mm(corner_x + direction_x * (self.offset + self.length)),
-                    y1: mm(corner_y),
-                    x2: mm(corner_x + direction_x * self.offset),
-                    y2: mm(corner_y),
-                });
-                marks.push(CardPrintLine {
-                    x1: mm(corner_x),
-                    y1: mm(corner_y + direction_y * (self.offset + self.length)),
-                    x2: mm(corner_x),
-                    y2: mm(corner_y + direction_y * self.offset),
-                });
+        if self.cut_line_style == CardPrintCutLineStyle::CornerMarks {
+            for (corner_x, direction_x) in [(x, -1), (x + self.width, 1)] {
+                for (corner_y, direction_y) in [(y, -1), (y + self.height, 1)] {
+                    marks.push(CardPrintLine {
+                        x1: mm(corner_x + direction_x * (self.offset + self.length)),
+                        y1: mm(corner_y),
+                        x2: mm(corner_x + direction_x * self.offset),
+                        y2: mm(corner_y),
+                    });
+                    marks.push(CardPrintLine {
+                        x1: mm(corner_x),
+                        y1: mm(corner_y + direction_y * (self.offset + self.length)),
+                        x2: mm(corner_x),
+                        y2: mm(corner_y + direction_y * self.offset),
+                    });
+                }
             }
         }
         (
@@ -412,6 +602,37 @@ impl Layout {
             },
             marks,
         )
+    }
+}
+
+fn cut_line_extent(
+    style: CardPrintCutLineStyle,
+    gap: i32,
+    offset: i32,
+    length: i32,
+    stroke: i32,
+) -> Result<i32, CardKitError> {
+    let half_stroke = (stroke + 1) / 2;
+    match style {
+        CardPrintCutLineStyle::CornerMarks => {
+            let extent = offset + length + half_stroke;
+            if offset < half_stroke || gap < extent {
+                return Err(print_invalid(
+                    "card_print.crop_clearance",
+                    "crop offset must clear half the stroke; gap must contain offset, mark length and half the stroke",
+                ));
+            }
+            Ok(extent)
+        }
+        CardPrintCutLineStyle::DashedGrid => {
+            if gap < stroke {
+                return Err(print_invalid(
+                    "card_print.cut_clearance",
+                    "the card gap must contain the complete shared cut-line stroke",
+                ));
+            }
+            Ok((gap + stroke + 1) / 2)
+        }
     }
 }
 

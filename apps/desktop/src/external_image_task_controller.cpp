@@ -278,6 +278,7 @@ void ExternalImageTaskController::ended(bool started) {
         poll();
         return;
     }
+    poll_.stop();
     waiting_ = false;
     pid_ = 0;
     remember();
@@ -294,8 +295,13 @@ void ExternalImageTaskController::ended(bool started) {
     emit changed();
 }
 void ExternalImageTaskController::poll() {
-    if (request_.isEmpty() || ready_ || !QFileInfo::exists(result_path_))
+    if (request_.isEmpty() || ready_)
         return;
+    if (!QFileInfo::exists(result_path_)) {
+        if (waiting_ && pid_ > 0 && !externalProcessAlive(pid_, executable_))
+            ended(true);
+        return;
+    }
     try {
         const auto result = DeckCliClient::readJson(result_path_, 65536);
         const QStringList

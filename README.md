@@ -62,7 +62,11 @@ Deck 是制作和打印卡片的桌面工作台。你可以制作识字卡、观
 或按毫米指定固定卡牌尺寸。不同卡片可按各自张数混排，也可以每种打印一张，
 或重复某张卡片铺满纸张、打印指定份数。
 
-预览和导出 PDF 使用相同排版。“微调”可设置纸张边距、卡片间隔和裁切线。
+卡片紧贴排列，默认只留 **0.2 毫米线缝**，相邻卡片共用浅灰虚线裁切线。
+纸张边距可直接调整；“微调”可设置卡牌尺寸和线宽，线缝随线宽同步变化。
+预览和导出 PDF 使用相同排版。导出后在 PDF 阅读器中打开打印设置，按 **100%／原始尺寸**打印。
+当前会话内，各卡组会保留自己的拼版设置，返回编辑后无需重新调整。
+导出时会建议不重名的文件名；导出成功后可点击“打开 PDF”。
 当前实现面向**单面打印**，尚不支持双面对位、出血和混合尺寸装箱。
 打印缩放会改变卡牌的实际尺寸，请关闭“适应页面”。
 
@@ -174,9 +178,14 @@ Use A4 or Letter paper. Pick a quick grid from **1×1 to 4×4**, set **1–8 col
 choose a fixed card size in millimeters. Mix different cards using their quantities, print one
 of each, or repeat one selected card to fill a sheet or reach a chosen copy count.
 
-The preview and exported PDF use the same layout. Fine adjustments control margins, card gaps
-and crop marks. Current printing is **single-sided**; duplex registration, bleed and mixed-size
-packing are outside the implemented scope. Printer scaling changes physical card dimensions,
+Cards sit closely together with a **0.2 mm line gap** by default and share light gray dashed cut
+guides. Adjust the paper margin directly, or use fine adjustments for card size and line width;
+the gap follows the line width. The preview and exported PDF use the same layout. Open the PDF
+in a reader and use its print settings at **100% / actual size**. Current printing is **single-sided**;
+duplex registration, bleed and mixed-size packing are outside the implemented scope. Each card set
+keeps its layout choices during the current session, including after returning to editing.
+Exports suggest an unused filename, and **Open PDF** opens the successful export in your PDF reader.
+Printer scaling changes physical card dimensions,
 so disable “fit to page” when printing the PDF.
 
 ### Language, appearance and AI

@@ -24,6 +24,7 @@ struct Document {
     QJsonObject summary;
     QSizeF sheet_mm;
     double stroke_mm = 0;
+    bool dashed_cut_grid = false;
     // Unique card resources are shared by every placement; no payload is expanded per copy.
     QHash<QString, QByteArray> cards;
     QVector<Page> pages;

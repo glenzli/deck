@@ -495,6 +495,10 @@
             <translation>此套已包含 64 张卡牌。</translation>
         </message>
         <message>
+            <source>Choose a flexible layout or start a new set before creating cards with AI. The saved cards keep their original layout until you choose.</source>
+            <translation>使用 AI 创建卡片前，请选择灵活布局或新建卡组。在您选择之前，已保存的卡片会保留原始布局。</translation>
+        </message>
+        <message>
             <source>This image is unusually narrow or wide. The set’s proportions were kept, and the complete image will fit inside the card.</source>
             <translation>此图片的宽高比例过于狭长，已保留整套卡牌的当前比例，图片仍会完整放入卡面。</translation>
         </message>
@@ -1072,6 +1076,10 @@
             <translation>有图片过窄或过宽，无法裁边填满。请返回卡牌，选择“完整显示图片”，或使用比例更合适的图片。</translation>
         </message>
         <message>
+            <source>The card gap must be at least as wide as the cut line.</source>
+            <translation>卡片之间的缝隙不能小于裁切线宽度。</translation>
+        </message>
+        <message>
             <source>The crop marks need more room. Increase the card spacing or shorten the marks, and keep the mark offset at least half the line width.</source>
             <translation>裁切线需要更多空间。请增大卡牌间隙或缩短裁切线，并让裁切线与卡牌的距离至少为线宽的一半。</translation>
         </message>
@@ -1115,6 +1123,14 @@
             <source>The print layout changed. Choose the PDF destination again.</source>
             <translation>打印排版已更改，请重新选择 PDF 保存位置。</translation>
         </message>
+        <message>
+            <source>The exported PDF is no longer available. Export it again before opening.</source>
+            <translation>已导出的 PDF 已移动或不可用。请重新导出后再打开。</translation>
+        </message>
+        <message>
+            <source>Could not open the exported PDF. Open it from the destination folder.</source>
+            <translation>无法打开已导出的 PDF，请从保存文件夹中打开。</translation>
+        </message>
     </context>
     <context>
         <name>CardPrintDialog</name>
@@ -1127,10 +1143,6 @@
             <translation>PDF 文档 (*.pdf)</translation>
         </message>
         <message>
-            <source>Print &amp; arrange</source>
-            <translation>打印与拼版</translation>
-        </message>
-        <message>
             <source>Paper</source>
             <translation>纸张</translation>
         </message>
@@ -1141,6 +1153,10 @@
         <message>
             <source>US Letter · 8.5 × 11 in</source>
             <translation>US Letter · 8.5 × 11 英寸</translation>
+        </message>
+        <message>
+            <source>The paper margin is the minimum blank space outside the cut lines.</source>
+            <translation>页边距是裁切线外侧保留的最小空白。</translation>
         </message>
         <message>
             <source>Cards on the sheet</source>
@@ -1183,6 +1199,10 @@
             <translation>使用固定卡片尺寸，自动计算每页张数。</translation>
         </message>
         <message>
+            <source>Cards sit together with a thin seam for light gray dashed cut lines.</source>
+            <translation>卡片紧贴排列，细缝中使用浅灰色虚线标示裁切位置。</translation>
+        </message>
+        <message>
             <source>Use a fixed card size</source>
             <translation>按固定卡片尺寸排版</translation>
         </message>
@@ -1207,28 +1227,24 @@
             <translation>卡牌高度（毫米）</translation>
         </message>
         <message>
+            <source>Reset layout</source>
+            <translation>重置拼版</translation>
+        </message>
+        <message>
+            <source>Export the PDF, then print at 100% / Actual size.</source>
+            <translation>导出 PDF 后，请按 100%／原始尺寸打印。</translation>
+        </message>
+        <message>
+            <source>Open PDF</source>
+            <translation>打开 PDF</translation>
+        </message>
+        <message>
+            <source>Export PDF…</source>
+            <translation>导出 PDF…</translation>
+        </message>
+        <message>
             <source>Paper margin (mm)</source>
             <translation>纸张边距（毫米）</translation>
-        </message>
-        <message>
-            <source>Space between cards (mm)</source>
-            <translation>卡牌间隙（毫米）</translation>
-        </message>
-        <message>
-            <source>Mark distance from card (mm)</source>
-            <translation>裁切线与卡牌的距离（毫米）</translation>
-        </message>
-        <message>
-            <source>Mark length (mm)</source>
-            <translation>裁切线长度（毫米）</translation>
-        </message>
-        <message>
-            <source>Mark line width (mm)</source>
-            <translation>裁切线粗细（毫米）</translation>
-        </message>
-        <message>
-            <source>Crop marks stay outside the finished card. Increase the spacing if longer marks do not fit.</source>
-            <translation>裁切线位于成品卡牌之外。若较长的裁切线放不下，请增大卡牌间隙。</translation>
         </message>
         <message>
             <source>Sheet preview</source>
@@ -1263,6 +1279,14 @@
             <translation>上一页</translation>
         </message>
         <message>
+            <source>Arrange &amp; export PDF</source>
+            <translation>拼版并导出 PDF</translation>
+        </message>
+        <message>
+            <source>Cut line width (mm)</source>
+            <translation>裁切线宽度（毫米）</translation>
+        </message>
+        <message>
             <source>Next page</source>
             <translation>下一页</translation>
         </message>
@@ -1271,16 +1295,8 @@
             <translation>返回卡牌</translation>
         </message>
         <message>
-            <source>Crop marks included · print at 100% / Actual size.</source>
-            <translation>已含裁切线 · 请按 100% 或原始尺寸打印。</translation>
-        </message>
-        <message>
             <source>Exporting…</source>
             <translation>正在导出…</translation>
-        </message>
-        <message>
-            <source>Export print PDF…</source>
-            <translation>导出打印 PDF…</translation>
         </message>
     </context>
     <context>

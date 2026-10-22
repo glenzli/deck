@@ -7,7 +7,9 @@ mod print;
 
 pub use draft::CardKitDraft;
 pub use export::CardKitExport;
-pub use print::{CardPrintOptions, CardPrintPaper, CardPrintPlan, CardPrintRequestOptions};
+pub use print::{
+    CardPrintCutLineStyle, CardPrintOptions, CardPrintPaper, CardPrintPlan, CardPrintRequestOptions,
+};
 
 use std::{path::PathBuf, sync::Arc};
 

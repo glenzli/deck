@@ -3,11 +3,55 @@
 #include "desktop_backend.hpp"
 #include <QBuffer>
 #include <QDebug>
+#include <QDesktopServices>
+#include <QDir>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QRegularExpression>
+#include <QStandardPaths>
 #include <QTemporaryFile>
 #include <QtConcurrent/QtConcurrentRun>
 #include <stdexcept>
+
+namespace {
+QString outputFolder(const QString& path, const QString& project) {
+    const QFileInfo info(path);
+    if (!info.isAbsolute() || !info.isDir() || !info.isReadable() || !info.isWritable())
+        return {};
+    const auto canonical = info.canonicalFilePath();
+    if (canonical.isEmpty())
+        return {};
+    const auto projectPath = QFileInfo(project).canonicalFilePath();
+    QDir directory(canonical);
+    do {
+        if ((!projectPath.isEmpty() && directory.absolutePath() == projectPath)
+            || directory.dirName().endsWith(".deck", Qt::CaseInsensitive)
+            || directory.dirName().endsWith(".shape", Qt::CaseInsensitive))
+            return {};
+    } while (directory.cdUp());
+    return canonical;
+}
+QString pdfBaseName(QString name) {
+    static const QRegularExpression invalid(QStringLiteral(R"([/\\:*?"<>|\p{Cc}\p{Cf}])"));
+    name.replace(invalid, QStringLiteral("_"));
+    name = name.simplified().left(64);
+    if (!name.isEmpty() && name.at(name.size() - 1).isHighSurrogate())
+        name.chop(1);
+    while (!name.isEmpty() && (name.endsWith('.') || name.endsWith(' ')))
+        name.chop(1);
+    while (name.startsWith('.') || name.startsWith(' '))
+        name.remove(0, 1);
+    if (name.isEmpty())
+        return QStringLiteral("Cards");
+    static const QRegularExpression reserved(
+        QStringLiteral("^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\..*)?$"),
+        QRegularExpression::CaseInsensitiveOption
+    );
+    if (reserved.match(name).hasMatch())
+        name.prepend('_');
+    return name;
+}
+} // namespace
 
 CardPrintController::CardPrintController(
     DesktopBackend& backend,
@@ -20,19 +64,27 @@ CardPrintController::CardPrintController(
             clear();
     });
     connect(&watcher_, &QFutureWatcher<QString>::finished, this, [this] {
-        running_ = false;
         const auto result = watcher_.result();
-        if (project_id_ == backend_.projectId() && project_path_ == backend_.bundlePath()
-            && document_) {
-            if (result.isEmpty())
+        const auto destination = pending_export_pdf_;
+        const bool current = pending_export_version_ == version_ && !destination.isEmpty()
+                             && project_id_ == backend_.projectId()
+                             && project_path_ == backend_.bundlePath() && document_;
+        pending_export_pdf_.clear();
+        pending_export_version_ = -1;
+        running_ = false;
+        if (current) {
+            if (result.isEmpty()) {
                 exported_pages_ = document_->pages.size();
-            else
-                fail(
-                    QT_TR_NOOP(
-                        "Could not export PDF. Choose a new file outside the project and try again."
-                    ),
-                    result
-                );
+                exported_pdf_ = destination;
+                error_.clear();
+            } else {
+                qWarning().noquote() << "card print:" << result;
+                error_ = QString::fromUtf8(QT_TR_NOOP(
+                    "Could not export PDF. Choose a new file outside the project and try again."
+                ));
+                exported_pages_ = 0;
+                exported_pdf_.clear();
+            }
             emit finished(result.isEmpty());
         }
         emit statusChanged();
@@ -56,6 +108,9 @@ void CardPrintController::clear() {
     problem_card_id_.clear();
     page_index_ = 0;
     exported_pages_ = 0;
+    exported_pdf_.clear();
+    pending_export_pdf_.clear();
+    pending_export_version_ = -1;
     emit documentChanged();
     emit previewChanged();
     emit statusChanged();
@@ -64,6 +119,7 @@ bool CardPrintController::fail(const char* message, const QString& detail) {
     qWarning().noquote() << "card print:" << detail;
     error_ = QString::fromUtf8(message);
     exported_pages_ = 0;
+    exported_pdf_.clear();
     emit statusChanged();
     return false;
 }
@@ -125,6 +181,11 @@ bool CardPrintController::prepare(
                     "An image is too narrow or wide for edge cropping. Go back to cards and "
                     "choose Show the complete image, or use artwork with more suitable proportions."
                 ),
+                detail
+            );
+        if (detail.contains("card_print.cut_clearance"))
+            return fail(
+                QT_TR_NOOP("The card gap must be at least as wide as the cut line."),
                 detail
             );
         if (detail.contains("card_print.crop_clearance"))
@@ -224,6 +285,24 @@ bool CardPrintController::showPage(int index) {
         );
     }
 }
+QUrl CardPrintController::suggestedPdfDestination(const QUrl& folder) const {
+    auto directory = folder.isLocalFile()
+                         ? outputFolder(folder.toLocalFile(), backend_.bundlePath())
+                         : QString{};
+    if (directory.isEmpty())
+        directory = outputFolder(
+            QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+            backend_.bundlePath()
+        );
+    if (directory.isEmpty())
+        return {};
+    const auto name = pdfBaseName(document_ ? document_->name : QString{});
+    auto path = QDir(directory).filePath(name + ".pdf");
+    quint64 copy = 2;
+    while (QFileInfo::exists(path) || QFileInfo(path).isSymLink())
+        path = QDir(directory).filePath(name + " (" + QString::number(copy++) + ").pdf");
+    return QUrl::fromLocalFile(path);
+}
 bool CardPrintController::exportPdf(const QUrl& destination, int expectedVersion) {
     if (running_)
         return false;
@@ -235,10 +314,23 @@ bool CardPrintController::exportPdf(const QUrl& destination, int expectedVersion
         );
     const auto document = document_;
     const auto project = project_path_;
-    const auto path = destination.toLocalFile();
+    const QFileInfo requested(destination.toLocalFile());
+    if (!requested.isAbsolute())
+        return fail(
+            QT_TR_NOOP(
+                "Could not export PDF. Choose a new file outside the project and try again."
+            ),
+            "absolute PDF destination required"
+        );
+    const auto directory = requested.dir().canonicalPath();
+    const auto path = directory.isEmpty() ? requested.absoluteFilePath()
+                                          : QDir(directory).filePath(requested.fileName());
     running_ = true;
     error_.clear();
     exported_pages_ = 0;
+    exported_pdf_.clear();
+    pending_export_pdf_ = QUrl::fromLocalFile(path);
+    pending_export_version_ = version_;
     emit statusChanged();
     watcher_.setFuture(QtConcurrent::run([document, path, project] {
         try {
@@ -248,5 +340,21 @@ bool CardPrintController::exportPdf(const QUrl& destination, int expectedVersion
             return QString::fromUtf8(e.what());
         }
     }));
+    return true;
+}
+bool CardPrintController::openExportedPdf() {
+    const QFileInfo file(exported_pdf_.toLocalFile());
+    if (running_ || !document_ || !exported_pdf_.isLocalFile()
+        || project_id_ != backend_.projectId() || project_path_ != backend_.bundlePath()
+        || !file.isAbsolute() || !file.isFile() || file.isSymLink() || !file.isReadable())
+        return fail(
+            QT_TR_NOOP("The exported PDF is no longer available. Export it again before opening."),
+            "exported PDF is unavailable"
+        );
+    if (!QDesktopServices::openUrl(exported_pdf_))
+        return fail(
+            QT_TR_NOOP("Could not open the exported PDF. Open it from the destination folder."),
+            "PDF viewer could not open the exported file"
+        );
     return true;
 }

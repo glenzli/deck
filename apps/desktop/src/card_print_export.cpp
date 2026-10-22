@@ -55,7 +55,17 @@ class SheetPainter {
             painter.fillRect(slot.rect_mm, Qt::white);
             renderer_->render(&painter, slot.content_rect_mm);
         }
-        painter.setPen(QPen(Qt::black, document_.stroke_mm, Qt::SolidLine, Qt::FlatCap));
+        QPen cut_lines(
+            document_.dashed_cut_grid ? QColor(QStringLiteral("#b0b0b0")) : QColor(Qt::black),
+            document_.stroke_mm,
+            Qt::SolidLine,
+            Qt::FlatCap
+        );
+        if (document_.dashed_cut_grid) {
+            // Dash lengths use physical millimetres in both the preview and PDF painter.
+            cut_lines.setDashPattern({1.2 / document_.stroke_mm, 0.8 / document_.stroke_mm});
+        }
+        painter.setPen(cut_lines);
         painter.drawLines(page.crop_marks);
     }
 
@@ -90,6 +100,10 @@ std::shared_ptr<const Document> prepare(const QJsonObject& plan) {
     result->name = plan["name"].toString();
     result->sheet_mm = QSizeF(number(plan, "sheet_width_mm"), number(plan, "sheet_height_mm"));
     result->stroke_mm = number(plan["options"].toObject(), "stroke_width_mm");
+    const auto cut_style = plan["options"].toObject()["cut_line_style"];
+    if (!cut_style.isUndefined() && cut_style != "corner_marks" && cut_style != "dashed_grid")
+        throw std::runtime_error("unknown cut-line style");
+    result->dashed_cut_grid = cut_style == "dashed_grid";
     if (result->sheet_mm.width() < 100 || result->sheet_mm.width() > 1000
         || result->sheet_mm.height() < 100 || result->sheet_mm.height() > 1000
         || result->stroke_mm <= 0 || result->stroke_mm > 2)

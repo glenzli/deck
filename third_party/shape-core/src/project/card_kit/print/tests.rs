@@ -144,6 +144,142 @@ fn assert_safe_geometry(plan: &CardPrintPlan) {
 }
 
 #[test]
+fn shared_cut_grid_deduplicates_full_sheets_and_follows_partial_page_boundaries() {
+    for (gap, stroke) in [(0.2, 0.2), (0.201, 0.199)] {
+        for margin in [0.0, 5.0, 12.0] {
+            let options = CardPrintOptions {
+                cut_line_style: CardPrintCutLineStyle::DashedGrid,
+                card_width_mm: 40.0,
+                card_height_mm: 50.0,
+                gap_mm: gap,
+                stroke_width_mm: stroke,
+                margin_mm: margin,
+                crop_mark_offset_mm: 0.0,
+                crop_mark_length_mm: 10.0,
+                ..Default::default()
+            };
+            for (count, expected_lines) in [(1, vec![4]), (9, vec![8]), (13, vec![8, 7])] {
+                let layout = Layout::with_grid(&options, count, Some((3, 3))).unwrap();
+                let copies: Vec<_> = (1..=count)
+                    .map(|i| ("card".into(), u16::try_from(i).unwrap()))
+                    .collect();
+                let pages = layout.pages(&copies, (750.0, 1050.0));
+                assert_eq!(
+                    pages
+                        .iter()
+                        .map(|page| page.crop_marks.len())
+                        .collect::<Vec<_>>(),
+                    expected_lines
+                );
+                for page in &pages {
+                    let first = page.slots[0].rect_mm;
+                    let outer_x = first.x - gap / 2.0;
+                    assert!(
+                        page.crop_marks
+                            .iter()
+                            .any(|line| (line.x1 - outer_x).abs() < 1e-6
+                                && (line.x2 - outer_x).abs() < 1e-6)
+                    );
+                    if page.slots.len() > 1 {
+                        let shared_x = first.x + first.width + gap / 2.0;
+                        assert!(
+                            page.crop_marks
+                                .iter()
+                                .any(|line| (line.x1 - shared_x).abs() < 1e-6
+                                    && (line.x2 - shared_x).abs() < 1e-6),
+                            "the seam has one cut line at its centre"
+                        );
+                    }
+                    for (index, line) in page.crop_marks.iter().enumerate() {
+                        let left = line.x1.min(line.x2) - stroke / 2.0;
+                        let right = line.x1.max(line.x2) + stroke / 2.0;
+                        let top = line.y1.min(line.y2) - stroke / 2.0;
+                        let bottom = line.y1.max(line.y2) + stroke / 2.0;
+                        assert!(left >= margin - 1e-6 && top >= margin - 1e-6);
+                        assert!(right <= 210.0 - margin + 1e-6 && bottom <= 297.0 - margin + 1e-6);
+                        for slot in &page.slots {
+                            let rect = slot.rect_mm;
+                            assert!(
+                                right <= rect.x + 1e-6
+                                    || left >= rect.x + rect.width - 1e-6
+                                    || bottom <= rect.y + 1e-6
+                                    || top >= rect.y + rect.height - 1e-6,
+                                "shared line crosses a card face"
+                            );
+                        }
+                        for other in &page.crop_marks[index + 1..] {
+                            if (line.x1 - line.x2).abs() < 1e-6
+                                && (other.x1 - other.x2).abs() < 1e-6
+                                && (line.x1 - other.x1).abs() < 1e-6
+                            {
+                                assert!(
+                                    line.y2 < other.y1 || other.y2 < line.y1,
+                                    "overlapping vertical cut lines"
+                                );
+                            }
+                            if (line.y1 - line.y2).abs() < 1e-6
+                                && (other.y1 - other.y2).abs() < 1e-6
+                                && (line.y1 - other.y1).abs() < 1e-6
+                            {
+                                assert!(
+                                    line.x2 < other.x1 || other.x2 < line.x1,
+                                    "overlapping horizontal cut lines"
+                                );
+                            }
+                        }
+                    }
+                }
+                let last = pages.last().unwrap();
+                if last.slots.len() == 4 {
+                    let final_card = last.slots.last().unwrap().rect_mm;
+                    let bottom = final_card.y + final_card.height + gap / 2.0;
+                    let bottom_line = last
+                        .crop_marks
+                        .iter()
+                        .find(|line| {
+                            (line.y1 - bottom).abs() < 1e-6 && (line.y2 - bottom).abs() < 1e-6
+                        })
+                        .unwrap();
+                    assert!(
+                        (bottom_line.x2 - (final_card.x + final_card.width + gap / 2.0)).abs()
+                            < 1e-6,
+                        "partial last row has no cuts for empty card positions"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn shared_cut_grid_requires_a_real_line_width_channel() {
+    let mut options = CardPrintOptions {
+        cut_line_style: CardPrintCutLineStyle::DashedGrid,
+        gap_mm: 0.2,
+        stroke_width_mm: 0.2,
+        ..Default::default()
+    };
+    Layout::new(&options, 1).unwrap();
+    options.gap_mm = 0.199;
+    assert!(
+        Layout::new(&options, 1)
+            .err()
+            .unwrap()
+            .to_string()
+            .starts_with("card_print.cut_clearance:")
+    );
+    options.cut_line_style = CardPrintCutLineStyle::CornerMarks;
+    options.gap_mm = 0.2;
+    assert!(
+        Layout::new(&options, 1)
+            .err()
+            .unwrap()
+            .to_string()
+            .starts_with("card_print.crop_clearance:")
+    );
+}
+
+#[test]
 fn physical_admission_checks_quantity_pages_gap_stroke_and_nonfinite_values() {
     let defaults = CardPrintOptions::default();
     assert!(Layout::new(&defaults, 0).is_err());

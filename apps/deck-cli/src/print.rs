@@ -3,8 +3,9 @@
 use crate::{Result, fail};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use shape_core::{CardPrintPaper, CardPrintRequestOptions, ShapeProject};
+use shape_core::{CardPrintRequestOptions, ShapeProject};
 use shape_domain::{CardKitRequest, WorkingInput};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -57,51 +58,6 @@ fn grid(imposition: &Imposition) -> Result<Option<(usize, usize)>> {
     }
 }
 
-fn um(value: f64) -> Result<f64> {
-    let scaled = value * 1000.0;
-    if !value.is_finite() || (scaled - scaled.round()).abs() > 0.000_001 {
-        return Err(fail(
-            "print_measurement",
-            "card_print.option_range: expected integral micrometres",
-        ));
-    }
-    Ok(scaled.round())
-}
-
-fn fit_grid(
-    options: &mut CardPrintRequestOptions,
-    composition: &CardKitRequest,
-    c: usize,
-    r: usize,
-) -> Result<()> {
-    let (paper_w, paper_h) = match options.paper {
-        CardPrintPaper::A4 => (210_000.0, 297_000.0),
-        CardPrintPaper::Letter => (215_900.0, 279_400.0),
-    };
-    // Physical range and crop-clearance admission still belongs to the pinned planner below.
-    let margin = um(options.margin_mm)?;
-    let gap = um(options.gap_mm)?;
-    let extent = um(options.crop_mark_offset_mm)?
-        + um(options.crop_mark_length_mm)?
-        + (um(options.stroke_width_mm)? / 2.0).ceil();
-    let c = f64::from(u8::try_from(c)?);
-    let r = f64::from(u8::try_from(r)?);
-    let max_w = (paper_w - 2.0 * (margin + extent) - (c - 1.0) * gap) / c;
-    let max_h = (paper_h - 2.0 * (margin + extent) - (r - 1.0) * gap) / r;
-    let (w, h) = if composition.layout.is_none() {
-        (750.0, 1050.0)
-    } else {
-        (
-            f64::from(composition.canvas_width),
-            f64::from(composition.canvas_height),
-        )
-    };
-    let scale = (max_w / w).min(max_h / h);
-    options.card_width_mm = Some((w * scale).floor() / 1000.0);
-    options.card_height_mm = Some((h * scale).floor() / 1000.0);
-    Ok(())
-}
-
 fn select_copies(
     composition: &CardKitRequest,
     imposition: &Imposition,
@@ -144,11 +100,7 @@ fn select_copies(
             }
         }
     }
-    if capacity == 0
-        || copies.is_empty()
-        || copies.len() > 4096
-        || copies.len().div_ceil(capacity) > 256
-    {
+    if capacity == 0 || copies.is_empty() || copies.len() > 4096 {
         return Err(fail(
             "print_pages",
             "card_print.page_limit: too many copies or pages",
@@ -171,86 +123,34 @@ fn plan(
     let dimensions = grid(&imposition)?;
     let composition = project.read_card_kit(source)?;
     if let Some((columns, rows)) = dimensions {
-        fit_grid(&mut options, &composition, columns, rows)?;
+        options.fit_grid(&composition, columns, rows)?;
     }
+    // Admit the requested job before the pinned owner loads or renders its selected resources.
+    // Automatic fill needs one admitted copy first to discover the physical sheet capacity.
+    let copies = select_copies(
+        &composition,
+        &imposition,
+        dimensions.map_or(1, |(c, r)| c * r),
+    )?;
+    if dimensions.is_some_and(|(c, r)| copies.len().div_ceil(c * r) > 256) {
+        return Err(fail(
+            "print_pages",
+            "card_print.page_limit: too many copies or pages",
+        ));
+    }
+    let mut selected_quantities = BTreeMap::<String, u16>::new();
+    for (id, _) in &copies {
+        *selected_quantities.entry(id.clone()).or_default() += 1;
+    }
+    let selection: Vec<_> = selected_quantities.into_iter().collect();
     // The upstream service remains the owner of content readiness, SVGs and crop clearance.
-    let mut plan = serde_json::to_value(project.plan_card_print_request(source, &options)?)?;
-    let columns = dimensions.map_or(
-        usize::try_from(plan["columns"].as_u64().unwrap_or(0))?,
-        |v| v.0,
-    );
-    let rows = dimensions.map_or(usize::try_from(plan["rows"].as_u64().unwrap_or(0))?, |v| {
-        v.1
-    });
+    let mut plan = project.plan_card_print_selection_request(source, &options, &selection)?;
+    let columns = dimensions.map_or(plan.columns, |v| v.0);
+    let rows = dimensions.map_or(plan.rows, |v| v.1);
     let capacity = columns * rows;
     let copies = select_copies(&composition, &imposition, capacity)?;
-    let template = plan["pages"][0]["slots"][0].clone();
-    let marks: Vec<_> = plan["pages"][0]["crop_marks"]
-        .as_array()
-        .ok_or_else(|| fail("print_geometry", "missing admitted crop marks"))?
-        .iter()
-        .take(8)
-        .cloned()
-        .collect();
-    if marks.len() != 8 {
-        return Err(fail("print_geometry", "incomplete admitted crop marks"));
-    }
-    let number = |value: &Value, key: &str| -> Result<f64> {
-        value[key]
-            .as_f64()
-            .ok_or_else(|| fail("print_geometry", format!("missing admitted {key}")))
-    };
-    let width = number(&template["rect_mm"], "width")?;
-    let height = number(&template["rect_mm"], "height")?;
-    let gap = number(&plan["options"], "gap_mm")?;
-    let c = f64::from(u8::try_from(columns)?);
-    let r = f64::from(u8::try_from(rows)?);
-    // Centre using integral micrometres, avoiding a floating-point floor losing 1 µm.
-    let origin_x =
-        ((um(number(&plan, "sheet_width_mm")?)? - c * um(width)? - (c - 1.0) * um(gap)?) / 2.0)
-            .floor()
-            / 1000.0;
-    let origin_y =
-        ((um(number(&plan, "sheet_height_mm")?)? - r * um(height)? - (r - 1.0) * um(gap)?) / 2.0)
-            .floor()
-            / 1000.0;
-    let x = number(&template["rect_mm"], "x")?;
-    let y = number(&template["rect_mm"], "y")?;
-    let mut pages = Vec::new();
-    for (index, chunk) in copies.chunks(capacity).enumerate() {
-        let mut slots = Vec::new();
-        let mut crop_marks = Vec::new();
-        for (index, (card_id, copy_index)) in chunk.iter().enumerate() {
-            let dx = origin_x + f64::from(u8::try_from(index % columns)?) * (width + gap) - x;
-            let dy = origin_y + f64::from(u8::try_from(index / columns)?) * (height + gap) - y;
-            let mut slot = template.clone();
-            slot["card_id"] = json!(card_id);
-            slot["copy_index"] = json!(copy_index);
-            for rect in ["rect_mm", "content_rect_mm"] {
-                slot[rect]["x"] = json!(number(&template[rect], "x")? + dx);
-                slot[rect]["y"] = json!(number(&template[rect], "y")? + dy);
-            }
-            slots.push(slot);
-            for mark in &marks {
-                let mut mark = mark.clone();
-                for (key, delta) in [("x1", dx), ("x2", dx), ("y1", dy), ("y2", dy)] {
-                    mark[key] = json!(number(&mark, key)? + delta);
-                }
-                crop_marks.push(mark);
-            }
-        }
-        pages.push(json!({"index":index,"slots":slots,"crop_marks":crop_marks}));
-    }
-    plan["cards"]
-        .as_array_mut()
-        .ok_or_else(|| fail("print_geometry", "missing admitted card faces"))?
-        .retain(|card| copies.iter().any(|(id, _)| card["id"] == *id));
-    plan["columns"] = json!(columns);
-    plan["rows"] = json!(rows);
-    plan["slots_per_page"] = json!(capacity);
-    plan["total_copies"] = json!(copies.len());
-    plan["page_count"] = json!(pages.len());
-    plan["pages"] = json!(pages);
+    plan.impose_grid(columns, rows, &copies)?;
+    let mut plan = serde_json::to_value(plan)?;
     plan["imposition"] = json!(imposition);
     Ok(plan)
 }

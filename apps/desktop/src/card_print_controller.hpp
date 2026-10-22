@@ -20,6 +20,7 @@ class CardPrintController : public QObject {
     Q_PROPERTY(bool running READ running NOTIFY statusChanged)
     Q_PROPERTY(QString error READ error NOTIFY statusChanged)
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
+    Q_PROPERTY(QUrl exportedPdf READ exportedPdf NOTIFY statusChanged)
     Q_PROPERTY(QString problemCardId READ problemCardId NOTIFY statusChanged)
   public:
     explicit CardPrintController(DesktopBackend&, const DeckCliClient&, QObject* parent = nullptr);
@@ -46,6 +47,9 @@ class CardPrintController : public QObject {
         return tr(error_.toUtf8().constData());
     }
     QString status() const;
+    QUrl exportedPdf() const {
+        return exported_pdf_;
+    }
     QString problemCardId() const {
         return problem_card_id_;
     }
@@ -55,7 +59,9 @@ class CardPrintController : public QObject {
         const QVariantMap& imposition = {}
     );
     Q_INVOKABLE bool showPage(int index);
+    Q_INVOKABLE QUrl suggestedPdfDestination(const QUrl& folder) const;
     Q_INVOKABLE bool exportPdf(const QUrl& destination, int expectedVersion);
+    Q_INVOKABLE bool openExportedPdf();
     void retranslate() {
         emit statusChanged();
     }
@@ -72,7 +78,9 @@ class CardPrintController : public QObject {
     const DeckCliClient& cli_;
     std::shared_ptr<const card_print::Document> document_;
     QString project_id_, project_path_, preview_, error_, problem_card_id_;
+    QUrl exported_pdf_, pending_export_pdf_;
     int page_index_ = 0, version_ = 0, exported_pages_ = 0;
+    int pending_export_version_ = -1;
     bool running_ = false;
     QFutureWatcher<QString> watcher_;
 };

@@ -30,6 +30,12 @@ class DeckDocumentController final : public QObject {
     Q_INVOKABLE bool openLocalProject(const QString& path) {
         return openProject(QUrl::fromLocalFile(path));
     }
+    Q_INVOKABLE void clearError() {
+        if (error_.isEmpty())
+            return;
+        error_.clear();
+        emit statusChanged();
+    }
     Q_INVOKABLE bool openShape();
     Q_INVOKABLE bool setShapeExecutable(const QUrl& path);
     Q_INVOKABLE void copyText(const QString& text);

@@ -135,7 +135,14 @@
     "shape-core/Cargo.toml": "Standalone manifest preserving pinned dependencies",
     "shape-core/src/project/card_kit/layout.rs": "Deck image placement, authoring placeholders and bounded text positioning with adjacent tests",
     "shape-core/src/project/card_kit/preview.rs": "Deck image placement, authoring placeholders and bounded text positioning with adjacent tests",
-    "shape-core/src/project/card_kit/layout/tests.rs": "Deck image placement, authoring placeholders and bounded text positioning with adjacent tests"
+    "shape-core/src/project/card_kit/layout/tests.rs": "Deck image placement, authoring placeholders and bounded text positioning with adjacent tests",
+    "shape-core/src/project/card_kit/print.rs": "Deck selected-card copy planning and shared dashed cut-grid geometry through the existing physical admission and renderer; authored quantities and accepted sources stay intact",
+    "shape-core/src/lib.rs": "Export the shared Deck print cut-line style through the existing public facade",
+    "shape-core/src/project.rs": "Export the shared Deck print cut-line style through the existing project facade",
+    "shape-core/src/project/card_kit.rs": "Export the shared Deck print cut-line style from its card print owner",
+    "shape-core/src/project/card_kit/print/options.rs": "Backward-compatible cut-line style and shared physical grid fitting with margin and stroke admission",
+    "shape-core/src/project/card_kit/print/tests.rs": "Shared cut-grid geometry, real narrow-gap admission and partial-page regression coverage",
+    "shape-core/src/project/card_kit/print/options/tests.rs": "Legacy request compatibility and chosen-grid fitting across papers and paper margins"
   },
   "license_sha256": "cbf67dee7d349e36018133dba3a6ba548f6d9ece04bf0cc79e1b4950678d4b15"
 }

@@ -93,8 +93,8 @@ function parse(text, composition, firstRowHeader) {
         }
         row.title = row.title.trim()
         if (!row.title.length && !row.rules.trim().length) return failure("content", item.line)
-        if (/[\u0000-\u001f\u007f]/.test(row.title)
-            || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(row.rules + row.art_prompt))
+        if (/[\u0000-\u001f\u007f-\u009f]/.test(row.title)
+            || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/.test(row.rules + row.art_prompt))
             return failure("invalid_text", item.line)
         if (utf8Length(row.title) > 256 || utf8Length(row.rules) > 8192 || utf8Length(row.art_prompt) > 4096)
             return failure("field_length", item.line)
@@ -103,9 +103,12 @@ function parse(text, composition, firstRowHeader) {
         seen[key] = true; rows.push(row)
     }
     const estimate = JSON.parse(JSON.stringify(composition))
-    estimate.cards = existing.concat(rows.map(row => ({id: "x".repeat(64), title: row.title,
-        rules: row.rules, art_prompt: row.art_prompt, card_type: "", cost: "", stats: "", flavor: "",
-        quantity: 1, artwork: null, text_material: null})))
+    estimate.cards = existing.concat(rows.map(row => {
+        const card = {id: "x".repeat(64), title: row.title, rules: row.rules, art_prompt: row.art_prompt,
+            card_type: "", cost: "", stats: "", flavor: "", quantity: 1, artwork: null, text_material: null}
+        if (composition.layout) card.layout = {mode: "text"}
+        return card
+    }))
     if (utf8Length(JSON.stringify(estimate)) > 60 * 1024) return failure("composition_size")
     return {rows: rows, error: "", line: 0, duplicateCount: duplicateCount, headerSkipped: headerSkipped,
         replacesPlaceholder: existing.length < (composition.cards || []).length}

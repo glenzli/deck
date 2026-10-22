@@ -81,3 +81,34 @@ fn one_axis_derives_the_other_both_axes_stay_explicit_and_neither_is_silently_sh
     );
     assert!(serde_json::from_value::<CardPrintRequestOptions>(json!({"bleed_mm":3})).is_err());
 }
+
+#[test]
+fn cut_style_is_backward_compatible_and_grid_fitting_reserves_the_line_outer_edge() {
+    let legacy: CardPrintRequestOptions = serde_json::from_value(json!({})).unwrap();
+    assert_eq!(legacy.cut_line_style, CardPrintCutLineStyle::CornerMarks);
+    assert!(
+        serde_json::from_value::<CardPrintRequestOptions>(json!({"cut_line_style":"unknown"}))
+            .is_err()
+    );
+    let request = request(750, 1050);
+    for paper in [CardPrintPaper::A4, CardPrintPaper::Letter] {
+        for margin in [0.0, 5.0, 12.0, 50.0] {
+            for (columns, rows) in [(1, 1), (2, 3), (3, 3)] {
+                let mut input: CardPrintRequestOptions = serde_json::from_value(json!({
+                    "paper":paper,"cut_line_style":"dashed_grid","gap_mm":0.2,
+                    "margin_mm":margin,"crop_mark_offset_mm":0,"crop_mark_length_mm":10
+                }))
+                .unwrap();
+                input.fit_grid(&request, columns, rows).unwrap();
+                let resolved = input.resolve(&request).unwrap();
+                let layout = Layout::with_grid(&resolved, 1, Some((columns, rows))).unwrap();
+                assert!(f64::from(layout.origin_x) / 1000.0 >= margin + 0.2 - 1e-9);
+                assert!(f64::from(layout.origin_y) / 1000.0 >= margin + 0.2 - 1e-9);
+                assert!(
+                    (resolved.card_width_mm / resolved.card_height_mm - 750.0 / 1050.0).abs()
+                        < 0.0001
+                );
+            }
+        }
+    }
+}

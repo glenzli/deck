@@ -19,6 +19,9 @@ ShapeDialog {
     property var cardChoices: []
     property string selectedCardId: ""
     property string projectIdentity: ""
+    property string layoutIdentity: ""
+    property var sessionLayouts: []
+    property var sourceDefaults: ({})
     property string sizeAnchor: ""
     property bool keepProportions: true
     property int gridColumns: 3
@@ -35,40 +38,101 @@ ShapeDialog {
     anchors.centerIn: parent
     width: parent ? Math.min(1180, parent.width - 40) : 1100
     height: parent ? Math.min(840, parent.height - 40) : 780
-    title: qsTr("Print & arrange")
+    title: qsTr("Arrange & export PDF")
     modal: true
     closePolicy: Popup.NoAutoClose
+    onClosed: { rememberLayout(); refreshTimer.stop() }
+    function printOptions() {
+        const request = Object.assign({}, options, {cut_line_style: "dashed_grid", gap_mm: options.stroke_width_mm})
+        delete request.crop_mark_offset_mm
+        delete request.crop_mark_length_mm
+        // Grid-generated dimensions are preview results, not fixed-size choices.
+        if (gridColumns > 0 || sizeAnchor === "" || sizeAnchor === "height") delete request.card_width_mm
+        if (gridColumns > 0 || sizeAnchor === "" || sizeAnchor === "width") delete request.card_height_mm
+        return request
+    }
+    function rememberLayout() {
+        if (!layoutIdentity.length) return
+        const settings = {options: printOptions(), sizeAnchor: sizeAnchor, keepProportions: keepProportions,
+            gridColumns: gridColumns, gridRows: gridRows, contentMode: contentMode, fillSheet: fillSheet,
+            repeatCopies: repeatCopies, selectedCardId: selectedCardId, advanced: advanced}
+        const next = sessionLayouts.filter(item => item.key !== layoutIdentity)
+        next.unshift({key: layoutIdentity, settings: settings})
+        sessionLayouts = next.slice(0, 24)
+    }
+    function restoreLayout(settings, selectedId) {
+        const next = Object.assign({}, sourceDefaults, settings ? settings.options : {}, {cut_line_style: "dashed_grid"})
+        next.gap_mm = next.stroke_width_mm
+        options = next
+        sizeAnchor = settings ? settings.sizeAnchor : ""
+        keepProportions = settings ? settings.keepProportions : true
+        gridColumns = settings ? settings.gridColumns : 3; gridRows = settings ? settings.gridRows : 3
+        contentMode = settings ? settings.contentMode : 0; fillSheet = settings ? settings.fillSheet : true
+        repeatCopies = settings ? settings.repeatCopies : 9; advanced = settings ? settings.advanced : false
+        const preferred = settings ? settings.selectedCardId : selectedId
+        selectedCardId = cardChoices.some(c => c.id === preferred) ? preferred
+            : cardChoices.some(c => c.id === selectedId) ? selectedId : cardChoices.length ? cardChoices[0].id : ""
+    }
     function openForSource(source, defaults, cards, selectedId) {
         if (controller.running) return false
+        rememberLayout()
+        destination.close(); clearPendingExport()
         sourcePin = JSON.parse(JSON.stringify(source))
-        projectIdentity = backend.projectId + "|" + backend.bundlePath
+        projectIdentity = JSON.stringify([backend.projectId, backend.bundlePath])
+        layoutIdentity = source.artifact_id ? JSON.stringify([backend.projectId, backend.bundlePath, source.artifact_id]) : ""
         cardChoices = (cards || []).map(c => ({id: c.id, title: c.title}))
-        selectedCardId = cardChoices.some(c => c.id === selectedId) ? selectedId : cardChoices.length ? cardChoices[0].id : ""
-        options = Object.assign({paper: "a4", margin_mm: 5, gap_mm: 3,
-            crop_mark_offset_mm: 0.5, crop_mark_length_mm: 1.5, stroke_width_mm: 0.2}, defaults || {})
-        sizeAnchor = ""; keepProportions = true; gridColumns = 3; gridRows = 3
-        contentMode = 0; fillSheet = true; repeatCopies = 9; advanced = false
+        sourceDefaults = Object.assign({paper: "a4", margin_mm: 5}, defaults || {},
+            {cut_line_style: "dashed_grid", gap_mm: 0.2, stroke_width_mm: 0.2})
+        const saved = sessionLayouts.find(item => item.key === layoutIdentity)
+        restoreLayout(saved ? saved.settings : null, selectedId)
         const result = refresh()
         open(); return result
     }
+    function closeLayout() {
+        rememberLayout(); refreshTimer.stop(); close()
+    }
+    function clearPendingExport() {
+        pendingExportPath = ""; pendingExportSource = ({})
+    }
+    function queueRefresh() {
+        if (controller.running) return
+        rememberLayout(); refreshTimer.restart()
+    }
+    function resetLayout() {
+        if (controller.running) return false
+        restoreLayout(null, selectedCardId)
+        return refresh()
+    }
+    function useFixedSize() {
+        if (controller.running) return
+        gridColumns = 0; gridRows = 0; advanced = true; sizeAnchor = "width"
+        queueRefresh()
+    }
+    function beginExport() {
+        if (!controller.ready || controller.running || refreshTimer.running) return false
+        destination.selectedFile = controller.suggestedPdfDestination(destination.currentFolder)
+        destination.planVersion = controller.version
+        destination.open(); return true
+    }
     function chooseGrid(columns, rows) {
         if (controller.running) return
-        gridColumns = columns; gridRows = rows; refreshTimer.restart()
+        gridColumns = columns; gridRows = rows; queueRefresh()
     }
     function setOption(key, value) {
         if (controller.running || options[key] === value) return
-        options = Object.assign({}, options, {[key]: value})
+        const next = Object.assign({}, options, {[key]: value})
+        if (key === "stroke_width_mm") next.gap_mm = value
+        options = next
         if (key === "card_width_mm" || key === "card_height_mm") {
             gridColumns = 0; gridRows = 0
             sizeAnchor = keepProportions ? (key === "card_width_mm" ? "width" : "height") : "both"
         }
-        refreshTimer.restart()
+        queueRefresh()
     }
     function refresh() {
         refreshTimer.stop()
-        const request = Object.assign({}, options)
-        if (gridColumns > 0 || sizeAnchor === "" || sizeAnchor === "height") delete request.card_width_mm
-        if (gridColumns > 0 || sizeAnchor === "" || sizeAnchor === "width") delete request.card_height_mm
+        rememberLayout()
+        const request = printOptions()
         const imposition = {content: ["quantities", "one_each", "repeat"][contentMode]}
         if (gridColumns > 0) { imposition.columns = gridColumns; imposition.rows = gridRows }
         if (contentMode === 2) {
@@ -83,8 +147,9 @@ ShapeDialog {
     Connections {
         target: root.backend
         function onProjectChanged() {
-            if (root.projectIdentity !== root.backend.projectId + "|" + root.backend.bundlePath) {
-                refreshTimer.stop(); destination.close(); root.close()
+            if (root.projectIdentity !== JSON.stringify([root.backend.projectId, root.backend.bundlePath])) {
+                root.clearPendingExport()
+                destination.close(); root.closeLayout()
             }
         }
     }
@@ -93,11 +158,12 @@ ShapeDialog {
         function onFinished(success) {
             if (success && root.pendingExportPath.length)
                 root.fileExported(root.pendingExportPath, root.pendingExportSource)
-            root.pendingExportPath = ""; root.pendingExportSource = ({})
+            root.clearPendingExport()
         }
     }
     FileDialog {
         id: destination
+        objectName: "cardPrintDestination"
         property int planVersion: -1
         title: qsTr("Export card print PDF")
         fileMode: FileDialog.SaveFile
@@ -106,7 +172,7 @@ ShapeDialog {
         onAccepted: {
             root.pendingExportPath = selectedFile.toString()
             root.pendingExportSource = JSON.parse(JSON.stringify(root.sourcePin))
-            if (!root.controller.exportPdf(selectedFile, planVersion)) root.pendingExportPath = ""
+            if (!root.controller.exportPdf(selectedFile, planVersion)) root.clearPendingExport()
         }
     }
     contentItem: ColumnLayout {
@@ -127,12 +193,27 @@ ShapeDialog {
                         selectedIndex: root.options.paper === "letter" ? 1 : 0
                         onActivated: index => root.setOption("paper", index === 1 ? "letter" : "a4")
                     }
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 8
+                        Label { Layout.fillWidth: true; text: qsTr("Paper margin (mm)"); color: Theme.textSoft; font.pixelSize: 11; wrapMode: Text.WordWrap }
+                        ShapeSpinBox {
+                            id: paperMargin
+                            objectName: "cardPrint-margin_mm"
+                            from: 0; to: 500; stepSize: 10
+                            value: Math.round((root.options.margin_mm || 0) * 10)
+                            validator: DoubleValidator { bottom: 0; top: 50; decimals: 1; notation: DoubleValidator.StandardNotation }
+                            textFromValue: (value, locale) => Number(value / 10).toLocaleString(locale, 'f', 1)
+                            valueFromText: (text, locale) => Math.round(Number.fromLocaleString(locale, text) * 10)
+                            onValueModified: root.setOption("margin_mm", value / 10)
+                        }
+                    }
+                    Label { Layout.fillWidth: true; text: qsTr("The paper margin is the minimum blank space outside the cut lines."); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
                     Label { text: qsTr("Cards on the sheet"); color: Theme.text; font.weight: Font.DemiBold; Layout.topMargin: 4 }
                     ShapeComboBox {
                         objectName: "cardPrintContent"; Layout.fillWidth: true
                         model: [qsTr("Mix cards · use their quantities"), qsTr("Mix cards · one of each"), qsTr("Repeat one card")]
                         selectedIndex: root.contentMode
-                        onActivated: index => { root.contentMode = index; refreshTimer.restart() }
+                        onActivated: index => { root.contentMode = index; root.queueRefresh() }
                     }
                     ColumnLayout {
                         visible: root.contentMode === 2; Layout.fillWidth: true; spacing: 7
@@ -140,12 +221,12 @@ ShapeDialog {
                             objectName: "cardPrintSelectedCard"; Layout.fillWidth: true
                             model: root.cardChoices.map(c => c.title || c.id)
                             selectedIndex: Math.max(0, root.cardChoices.findIndex(c => c.id === root.selectedCardId))
-                            onActivated: index => { root.selectedCardId = root.cardChoices[index].id; refreshTimer.restart() }
+                            onActivated: index => { root.selectedCardId = root.cardChoices[index].id; root.queueRefresh() }
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            ShapeCheckBox { objectName: "cardPrintFillSheet"; Layout.fillWidth: true; text: qsTr("Fill one sheet"); checked: root.fillSheet; onToggled: { root.fillSheet = checked; refreshTimer.restart() } }
-                            ShapeSpinBox { objectName: "cardPrintCopies"; visible: !root.fillSheet; from: 1; to: 4096; value: root.repeatCopies; onValueModified: { root.repeatCopies = value; refreshTimer.restart() } }
+                            ShapeCheckBox { objectName: "cardPrintFillSheet"; Layout.fillWidth: true; text: qsTr("Fill one sheet"); checked: root.fillSheet; onToggled: { root.fillSheet = checked; root.queueRefresh() } }
+                            ShapeSpinBox { objectName: "cardPrintCopies"; visible: !root.fillSheet; from: 1; to: 4096; value: root.repeatCopies; onValueModified: { root.repeatCopies = value; root.queueRefresh() } }
                         }
                     }
                     Label { text: qsTr("Quick arrangement"); color: Theme.text; font.weight: Font.DemiBold; Layout.topMargin: 4 }
@@ -172,7 +253,8 @@ ShapeDialog {
                         text: root.gridColumns > 0 ? qsTr("Cards fit proportionally inside this grid.") : qsTr("Using a fixed card size; the sheet fills automatically.")
                         color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap
                     }
-                    ShapeButton { objectName: "cardPrintActualSize"; text: qsTr("Use a fixed card size"); quiet: true; selected: root.gridColumns === 0; onClicked: { root.chooseGrid(0, 0); root.advanced = true; root.sizeAnchor = "width" } }
+                    Label { Layout.fillWidth: true; text: qsTr("Cards sit together with a thin seam for light gray dashed cut lines."); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+                    ShapeButton { objectName: "cardPrintActualSize"; text: qsTr("Use a fixed card size"); quiet: true; selected: root.gridColumns === 0; onClicked: root.useFixedSize() }
                     Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.border }
                     ShapeButton { objectName: "cardPrintAdvanced"; quiet: true; iconSource: "../../icons/settings.svg"; text: root.advanced ? qsTr("Hide fine adjustments") : qsTr("Fine adjustments…"); onClicked: root.advanced = !root.advanced }
                     ColumnLayout {
@@ -180,17 +262,13 @@ ShapeDialog {
                         ShapeCheckBox {
                             objectName: "cardPrintKeepProportions"
                             text: qsTr("Keep the card proportions"); checked: root.keepProportions; enabled: root.gridColumns === 0
-                            onToggled: { root.keepProportions = checked; root.sizeAnchor = checked ? "width" : "both"; refreshTimer.restart() }
+                            onToggled: { root.keepProportions = checked; root.sizeAnchor = checked ? "width" : "both"; root.queueRefresh() }
                         }
                         Repeater {
                             model: [
                                 {key: "card_width_mm", label: qsTr("Card width (mm)"), min: 100, max: 3000, step: 10},
                                 {key: "card_height_mm", label: qsTr("Card height (mm)"), min: 100, max: 3000, step: 10},
-                                {key: "margin_mm", label: qsTr("Paper margin (mm)"), min: 0, max: 500, step: 10},
-                                {key: "gap_mm", label: qsTr("Space between cards (mm)"), min: 0, max: 300, step: 5},
-                                {key: "crop_mark_offset_mm", label: qsTr("Mark distance from card (mm)"), min: 1, max: 100, step: 1},
-                                {key: "crop_mark_length_mm", label: qsTr("Mark length (mm)"), min: 1, max: 100, step: 1},
-                                {key: "stroke_width_mm", label: qsTr("Mark line width (mm)"), min: 1, max: 5, step: 1}
+                                {key: "stroke_width_mm", label: qsTr("Cut line width (mm)"), min: 1, max: 5, step: 1}
                             ]
                             delegate: RowLayout {
                                 id: optionRow
@@ -210,7 +288,7 @@ ShapeDialog {
                                 }
                             }
                         }
-                        Label { Layout.fillWidth: true; text: qsTr("Crop marks stay outside the finished card. Increase the spacing if longer marks do not fit."); color: Theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 11 }
+                        ShapeButton { objectName: "cardPrintReset"; text: qsTr("Reset layout"); quiet: true; onClicked: root.resetLayout() }
                     }
                 }
             }
@@ -230,11 +308,11 @@ ShapeDialog {
                         width: Math.min(parent.width - 40, (parent.height - 40) * 210 / 297); height: width * 297 / 210
                         anchors.centerIn: parent; color: "#ffffff"; border.color: "#d0d0d0"
                         Grid {
-                            anchors.fill: parent; anchors.margins: 16; spacing: 4
+                            anchors.fill: parent; anchors.margins: 16; spacing: 1
                             columns: root.gridColumns || 3
                             Repeater {
                                 model: (root.gridColumns || 3) * (root.gridRows || 3)
-                                Rectangle { width: (parent.width - ((root.gridColumns || 3) - 1) * 4) / (root.gridColumns || 3); height: (parent.height - ((root.gridRows || 3) - 1) * 4) / (root.gridRows || 3); color: "#f2f2f2"; border.color: "#bcbcbc"; border.width: 1 }
+                                Rectangle { width: (parent.width - ((root.gridColumns || 3) - 1)) / (root.gridColumns || 3); height: (parent.height - ((root.gridRows || 3) - 1)) / (root.gridRows || 3); color: "#f2f2f2"; border.color: "#d0d0d0"; border.width: 1 }
                             }
                         }
                     }
@@ -252,13 +330,14 @@ ShapeDialog {
         RowLayout {
             Layout.fillWidth: true; visible: root.controller.error.length > 0
             Label { Layout.fillWidth: true; text: (root.problemTitle.length ? qsTr("Card: %1").arg(root.problemTitle) + " · " : "") + root.controller.error; color: Theme.danger; wrapMode: Text.WordWrap; font.pixelSize: 11 }
-            ShapeButton { objectName: "cardPrintFixCard"; visible: root.controller.problemCardId.length > 0; text: qsTr("Edit this card"); onClicked: { refreshTimer.stop(); root.close(); root.editCardRequested(root.controller.problemCardId) } }
+            ShapeButton { objectName: "cardPrintFixCard"; visible: root.controller.problemCardId.length > 0; text: qsTr("Edit this card"); onClicked: { root.closeLayout(); root.editCardRequested(root.controller.problemCardId) } }
         }
         RowLayout {
             Layout.fillWidth: true; spacing: 14
-            ShapeButton { objectName: "cardPrintClose"; text: qsTr("Back to cards"); enabled: !root.controller.running; onClicked: { refreshTimer.stop(); root.close() } }
-            Label { Layout.fillWidth: true; text: root.controller.status || qsTr("Crop marks included · print at 100% / Actual size."); color: Theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 11 }
-            ShapeButton { objectName: "cardPrintExport"; iconSource: "../../icons/print.svg"; text: root.controller.running ? qsTr("Exporting…") : qsTr("Export print PDF…"); primary: true; enabled: root.controller.ready && !root.controller.running && !refreshTimer.running; onClicked: { destination.planVersion = root.controller.version; destination.open() } }
+            ShapeButton { objectName: "cardPrintClose"; text: qsTr("Back to cards"); enabled: !root.controller.running; onClicked: root.closeLayout() }
+            Label { Layout.fillWidth: true; text: root.controller.status || qsTr("Export the PDF, then print at 100% / Actual size."); color: Theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 11 }
+            ShapeButton { objectName: "cardPrintOpenPdf"; text: qsTr("Open PDF"); visible: root.controller.exportedPdf.toString().length > 0 && !refreshTimer.running; enabled: !root.controller.running; onClicked: root.controller.openExportedPdf() }
+            ShapeButton { objectName: "cardPrintExport"; iconSource: "../../icons/export.svg"; text: root.controller.running ? qsTr("Exporting…") : qsTr("Export PDF…"); primary: true; enabled: root.controller.ready && !root.controller.running && !refreshTimer.running; onClicked: root.beginExport() }
         }
     }
 }

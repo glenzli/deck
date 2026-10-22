@@ -8,15 +8,17 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!("deck-sheet-{}", uuid::Uuid::now_v7()));
-        let mut project = ShapeProject::create(root.join("cards.deck"), "Sheet fixture").unwrap();
-        let composition: CardKitRequest = serde_json::from_value(json!({
+        Self::with_composition(json!({
             "name":"Sheet fixture", "layout":{"mode":"text"},
             "cards":[{"id":"a","title":"A","quantity":6},
                      {"id":"b","title":"B","quantity":4},
                      {"id":"c","title":"C","quantity":2}]
         }))
-        .unwrap();
+    }
+    fn with_composition(value: Value) -> Self {
+        let root = std::env::temp_dir().join(format!("deck-sheet-{}", uuid::Uuid::now_v7()));
+        let mut project = ShapeProject::create(root.join("cards.deck"), "Sheet fixture").unwrap();
+        let composition: CardKitRequest = serde_json::from_value(value).unwrap();
         let draft = project.create_card_kit_draft(&composition).unwrap();
         let candidate = project
             .propose_card_kit(draft.artifact_id, &draft.draft_digest)
@@ -58,10 +60,12 @@ fn safe_geometry(plan: &Value) {
     let h = n(plan, "sheet_height_mm");
     for page in plan["pages"].as_array().unwrap() {
         let slots = page["slots"].as_array().unwrap();
-        assert_eq!(
-            page["crop_marks"].as_array().unwrap().len(),
-            slots.len() * 8
-        );
+        if plan["options"]["cut_line_style"] != "dashed_grid" {
+            assert_eq!(
+                page["crop_marks"].as_array().unwrap().len(),
+                slots.len() * 8
+            );
+        }
         for (i, slot) in slots.iter().enumerate() {
             let r = &slot["rect_mm"];
             let content = &slot["content_rect_mm"];
@@ -178,6 +182,111 @@ fn mixed_and_repeat_modes_preserve_copy_identity_and_authored_state() {
 }
 
 #[test]
+fn selected_content_admits_the_requested_job_instead_of_authored_quantities() {
+    let f = Fixture::with_composition(json!({
+        "name":"Large authored quantity", "layout":{"mode":"text"},
+        "cards":[{"id":"a","title":"A","quantity":300},
+                 {"id":"b","title":"B","quantity":1}]
+    }));
+    let each = f.plan(json!({"columns":1,"rows":1,"content":"one_each"}));
+    assert_eq!(each["total_copies"], 2);
+    assert_eq!(each["page_count"], 2);
+    let repeat = f.plan(json!({"columns":1,"rows":1,"content":"repeat","card_id":"b","copies":1}));
+    assert_eq!(repeat["total_copies"], 1);
+    assert_eq!(repeat["page_count"], 1);
+    let fill = f.plan(json!({"content":"repeat","card_id":"b"}));
+    assert_eq!(fill["total_copies"], fill["slots_per_page"]);
+    assert_eq!(fill["page_count"], 1);
+    assert!(
+        plan(
+            &f.project,
+            f.source,
+            CardPrintRequestOptions::default(),
+            Some(serde_json::from_value(json!({"columns":1,"rows":1})).unwrap()),
+        )
+        .is_err(),
+        "authored quantities still exceed the chosen 256-page limit"
+    );
+}
+
+#[test]
+fn repeating_a_readable_card_ignores_unselected_face_overflow() {
+    let mut f = Fixture::with_composition(json!({
+        "name":"Selected face", "layout":{"mode":"text"},
+        "cards":[{"id":"overflow","title":"Long card","rules":"Long text. ".repeat(700)},
+                 {"id":"readable","title":"Readable card"}]
+    }));
+    let before = f.project.open_card_kit_draft(f.source.artifact_id).unwrap();
+    let repeated = f.plan(json!({"columns":3,"rows":3,"content":"repeat","card_id":"readable"}));
+    assert_eq!(repeated["cards"].as_array().unwrap().len(), 1);
+    assert_eq!(repeated["cards"][0]["id"], "readable");
+    assert_eq!(repeated["total_copies"], 9);
+    safe_geometry(&repeated);
+    let all = plan(
+        &f.project,
+        f.source,
+        CardPrintRequestOptions::default(),
+        Some(serde_json::from_value(json!({"columns":3,"rows":3,"content":"one_each"})).unwrap()),
+    )
+    .unwrap_err();
+    assert!(
+        all.to_string()
+            .contains("card_print.text_overflow: card overflow")
+    );
+    let after = f.project.open_card_kit_draft(f.source.artifact_id).unwrap();
+    assert_eq!(before.draft_digest, after.draft_digest);
+    assert_eq!(before.expected_head, after.expected_head);
+}
+
+#[test]
+fn selected_copy_service_keeps_transient_counts_separate_from_authored_limits() {
+    let f = Fixture::new();
+    let selected = f
+        .project
+        .plan_card_print_selection_request(
+            f.source,
+            &CardPrintRequestOptions::default(),
+            &[("b".into(), 1000), ("a".into(), 1)],
+        )
+        .unwrap();
+    assert_eq!(selected.total_copies, 1001);
+    assert_eq!(selected.cards[0].id, "a", "retain authored card ordering");
+    assert_eq!(selected.cards[1].id, "b");
+    assert_eq!(
+        selected
+            .pages
+            .last()
+            .unwrap()
+            .slots
+            .last()
+            .unwrap()
+            .copy_index,
+        1000
+    );
+    assert_eq!(
+        f.project.read_card_kit(f.source).unwrap().cards[1].quantity,
+        4
+    );
+    for selection in [
+        vec![],
+        vec![("a".into(), 0)],
+        vec![("a".into(), 1), ("a".into(), 2)],
+        vec![("absent".into(), 1)],
+        vec![("a".into(), 4097)],
+    ] {
+        assert!(
+            f.project
+                .plan_card_print_selection_request(
+                    f.source,
+                    &CardPrintRequestOptions::default(),
+                    &selection,
+                )
+                .is_err()
+        );
+    }
+}
+
+#[test]
 fn invalid_grid_selection_quantity_and_readability_are_rejected() {
     let f = Fixture::new();
     for value in [
@@ -204,4 +313,64 @@ fn invalid_grid_selection_quantity_and_readability_are_rejected() {
     assert!(
         serde_json::from_value::<Imposition>(json!({"columns":2,"rows":2,"unknown":true})).is_err()
     );
+}
+
+#[test]
+fn tight_selected_sheets_share_core_geometry_for_margins_and_partial_pages() {
+    let mut f = Fixture::new();
+    let before = f.project.open_card_kit_draft(f.source.artifact_id).unwrap();
+    let mut widths = Vec::new();
+    for margin in [0.0, 5.0, 12.0] {
+        let options: CardPrintRequestOptions = serde_json::from_value(json!({
+            "cut_line_style":"dashed_grid","gap_mm":0.2,"margin_mm":margin
+        }))
+        .unwrap();
+        let actual = plan(
+            &f.project,
+            f.source,
+            options,
+            Some(
+                serde_json::from_value(json!({
+                    "columns":3,"rows":3,"content":"repeat","card_id":"b","copies":13
+                }))
+                .unwrap(),
+            ),
+        )
+        .unwrap();
+        assert_eq!(actual["source"], json!(f.source));
+        assert_eq!(actual["cards"].as_array().unwrap().len(), 1);
+        assert_eq!(actual["cards"][0]["id"], "b");
+        assert_eq!(
+            actual["pages"][0]["crop_marks"].as_array().unwrap().len(),
+            8
+        );
+        assert_eq!(
+            actual["pages"][1]["crop_marks"].as_array().unwrap().len(),
+            7
+        );
+        assert_eq!(actual["pages"][1]["slots"][3]["copy_index"], 13);
+        safe_geometry(&actual);
+        widths.push(n(&actual["options"], "card_width_mm"));
+        let mut core = f
+            .project
+            .plan_card_print_selection_request(
+                f.source,
+                &serde_json::from_value(actual["options"].clone()).unwrap(),
+                &[("b".into(), 13)],
+            )
+            .unwrap();
+        core.impose_grid(3, 3, &(1..=13).map(|i| ("b".into(), i)).collect::<Vec<_>>())
+            .unwrap();
+        assert_eq!(
+            actual["pages"],
+            serde_json::to_value(core).unwrap()["pages"]
+        );
+    }
+    assert!(
+        widths[0] > widths[1] && widths[1] > widths[2],
+        "larger paper margins reduce the actual card faces"
+    );
+    let after = f.project.open_card_kit_draft(f.source.artifact_id).unwrap();
+    assert_eq!(before.draft_digest, after.draft_digest);
+    assert_eq!(before.expected_head, after.expected_head);
 }

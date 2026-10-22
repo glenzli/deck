@@ -64,6 +64,7 @@ CardDraftAssistant::CardDraftAssistant(QString cli, const QString& settings, QOb
             finishCancellation(
                 status == QProcess::NormalExit && code == 0
                 && result["schema"] == "deck.cli.result/1" && result["status"] == "ok"
+                && result["result"].toObject()["response_id"].toString() == response_
                 && result["result"].toObject()["cancelled"].toBool()
             );
         }

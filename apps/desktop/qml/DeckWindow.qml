@@ -53,9 +53,9 @@ ApplicationWindow {
         if (exchange.active && !exchange.cancel()) close.accepted = false
     }
     Connections { target: window.assistant; function onChanged() { if (window.closeAfterAssistant && !window.assistant.busy) window.close() } }
-    Shortcut { sequence: StandardKey.Open; enabled: !window.exchange.active; onActivated: window.showProjects() }
-    Shortcut { sequence: StandardKey.New; enabled: !window.exchange.active; onActivated: if (cards.flush()) { newName.text = ""; newProjectDialog.open() } }
-    Shortcut { sequence: StandardKey.Print; enabled: window.backend.projectOpen && !window.cardPrint.running; onActivated: cards.acceptAndPrint() }
+    Shortcut { sequences: [StandardKey.Open]; enabled: !window.exchange.active; onActivated: window.showProjects() }
+    Shortcut { sequences: [StandardKey.New]; enabled: !window.exchange.active; onActivated: if (cards.flush()) { newName.text = ""; newProjectDialog.open() } }
+    Shortcut { sequences: [StandardKey.Print]; enabled: window.backend.projectOpen && !window.cardPrint.running; onActivated: cards.acceptAndPrint() }
     Shortcut { sequence: "Ctrl+,"; onActivated: settingsDialog.open() }
     header: ToolBar {
         id: titleBar
@@ -97,7 +97,7 @@ ApplicationWindow {
                         Label {
                             objectName: "deckProjectHeading"
                             Layout.fillWidth: true
-                            text: projectButton.heading; color: Theme.text
+                            text: projectButton.heading; textFormat: Text.PlainText; color: Theme.text
                             font.pixelSize: 13; font.weight: Font.Medium
                             elide: Text.ElideRight; maximumLineCount: 1; wrapMode: Text.NoWrap
                         }
@@ -277,6 +277,7 @@ ApplicationWindow {
         objectName: "deckNewProjectDialog"
         parent: Overlay.overlay; anchors.centerIn: parent; width: Math.min(540, parent.width - 40)
         modal: true; title: window.exchange.needsImport ? qsTr("Save cards from Shape") : qsTr("New Deck project")
+        onAboutToShow: window.documents.clearError()
         property url folder: ""
         contentItem: ColumnLayout {
             spacing: 12
@@ -308,10 +309,19 @@ ApplicationWindow {
     FolderDialog { id: openFolder; title: qsTr("Open a Deck project folder"); onAccepted: { if (cards.flush() && window.documents.openProject(selectedFolder)) { cards.openWorkspace(""); projectsDialog.close() } } }
     ShapeDialog {
         id: projectsDialog
+        objectName: "deckProjectsDialog"
         parent: Overlay.overlay; anchors.centerIn: parent; width: Math.min(680, parent.width - 40); height: Math.min(520, parent.height - 40)
         modal: true; title: qsTr("Open a Deck project")
+        onAboutToShow: window.documents.clearError()
         contentItem: ColumnLayout {
             ShapeButton { text: qsTr("Choose a project folder…"); onClicked: openFolder.open() }
+            Label {
+                objectName: "deckProjectOpenError"
+                Layout.fillWidth: true
+                visible: text.length > 0
+                text: window.documents.error; textFormat: Text.PlainText
+                color: Theme.danger; wrapMode: Text.WordWrap
+            }
             ListView {
                 Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                 model: window.documents.recentProjects

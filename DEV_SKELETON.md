@@ -25,7 +25,9 @@ own implementation facts. This initial repository is under active development.
   patches. Image placeholders are authoring aids; missing artwork still blocks printing.
 - Deck's transient sheet choices live in the CLI print owner, shared by desktop preparation and
   PDF commands. It fits a chosen grid, selects copies and translates the pinned planner's admitted
-  slot/crop-mark template. Card rendering, readable text checks and the single Qt painter stay reused.
+  slot template. The pinned print owner also supplies shared dashed cut-guide geometry for tightly
+  packed sheets, alongside compatible corner marks. Card rendering, readable text checks and the
+  single Qt painter stay reused; preview and PDF consume the same physical coordinates.
 - The card draft assistant owns asynchronous text-candidate lifecycle and cancellation. The
   packaged CLI's assistant owner uses the pinned official Infer Runtime SDK for discovery,
   authentication, exact contracts and local-only requests. It never writes project content;

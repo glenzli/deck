@@ -60,6 +60,7 @@ Page {
             && d.inputRevisionId === artworkOriginal.revision_id))
     property string artworkCandidateSource: ""
     property bool listApplied: false
+    property string appendSaveError: ""
     required property CardDraftAssistant assistant
     property string assistantLanguage: "en"
     signal assistantSettingsRequested()
@@ -153,14 +154,29 @@ Page {
         changed(next); selectedCardId = id
     }
     function assistantIdentity() { return JSON.stringify([backend.projectId, backend.bundlePath, controller.draft, composition]) }
+    function ensureAssistantLayout() {
+        if (composition.layout) return true
+        localError = qsTr("Choose a flexible layout or start a new set before creating cards with AI. The saved cards keep their original layout until you choose.")
+        setLayoutDialog.open(); return false
+    }
     function openAssistant() {
-        if (!flush()) return false
-        assistantDialog.open(); return true
+        if (!flush() || !ensureAssistantLayout()) return false
+        appendSaveError = ""; assistantDialog.open(); return true
+    }
+    function saveAppendedCards(next, firstCardId) {
+        saveTimer.stop()
+        appendSaveError = ""
+        // Keep the draft and reviewed candidate intact until saving succeeds.
+        if (!controller.save(next)) { appendSaveError = controller.error; return false }
+        localError = ""; selectedCardId = firstCardId
+        if (visible) previewTimer.restart()
+        return true
     }
     function appendAssistantCards(rows, identity) {
         if (identity !== assistantIdentity() || !rows.length || rows.length > 16) {
             localError = qsTr("The card set changed. Generate again for the current draft."); return false
         }
+        if (!ensureAssistantLayout()) return false
         const next = copy(composition)
         next.cards = copy(CardListImport.effectiveCards(composition))
         if (next.cards.length + rows.length > 64) { localError = qsTr("This set already contains 64 cards."); return false }
@@ -175,8 +191,7 @@ Page {
         if (CardListImport.utf8Length(JSON.stringify(next)) > 60 * 1024) {
             localError = qsTr("This list is too large for these cards. Add a smaller group."); return false
         }
-        changed(next); selectedCardId = next.cards[next.cards.length - rows.length].id
-        if (!flush()) return false
+        if (!saveAppendedCards(next, next.cards[next.cards.length - rows.length].id)) return false
         assistantDialog.close(); return true
     }
     function nextCardId(ids) {
@@ -194,7 +209,7 @@ Page {
     }
     function openCardList() {
         if (!flush()) return
-        listApplied = false; listFirstHeader = false; listText.text = ""; listDialog.open(); listText.focusEditor()
+        listApplied = false; appendSaveError = ""; listFirstHeader = false; listText.text = ""; listDialog.open(); listText.focusEditor()
     }
     function cardListError() {
         const result = listPreview
@@ -220,11 +235,13 @@ Page {
         for (const row of result.rows) {
             const id = nextCardId(ids)
             ids.add(id)
-            next.cards.push({id: id, title: row.title, rules: row.rules, art_prompt: row.art_prompt,
-                card_type: "", cost: "", stats: "", flavor: "", quantity: 1, artwork: null, text_material: null})
+            const card = {id: id, title: row.title, rules: row.rules, art_prompt: row.art_prompt,
+                card_type: "", cost: "", stats: "", flavor: "", quantity: 1, artwork: null, text_material: null}
+            if (next.layout) card.layout = {mode: "text"}
+            next.cards.push(card)
         }
-        listApplied = true; changed(next); selectedCardId = next.cards[next.cards.length - result.rows.length].id
-        flush(); listDialog.close(); return true
+        if (!saveAppendedCards(next, next.cards[next.cards.length - result.rows.length].id)) return false
+        listApplied = true; listDialog.close(); return true
     }
     function moveCard(delta) {
         const next = copy(composition), index = next.cards.findIndex(c => c.id === selectedCardId), to = index + delta
@@ -898,6 +915,12 @@ Page {
         availableCards: 64 - CardListImport.effectiveCards(root.composition).length
         onAppendRequested: (rows, identity) => root.appendAssistantCards(rows, identity)
         onSettingsRequested: root.assistantSettingsRequested()
+        footer: Label {
+            objectName: "deckAssistantSaveError"
+            visible: root.appendSaveError.length > 0
+            text: root.appendSaveError; color: Theme.danger; wrapMode: Text.WordWrap
+            leftPadding: 20; rightPadding: 20; bottomPadding: 20
+        }
     }
     ShapeMenu {
         popupType: Popup.Item
@@ -989,6 +1012,7 @@ Page {
             Label { Layout.fillWidth: true; text: qsTr("Paste one card per row, or copy table columns for title, text and image description. A title or body text is enough. A single column keeps every row as a card."); wrapMode: Text.WordWrap; color: Theme.muted }
             ShapeTextEditor { id: listText; objectName: "cardKitListText"; Layout.fillWidth: true; Layout.preferredHeight: 200; wrapMode: TextEdit.NoWrap; placeholderText: qsTr("Paste your rows here…") }
             ShapeCheckBox { objectName: "cardKitListHasHeading"; text: qsTr("First row contains column headings"); checked: root.listFirstHeader; onToggled: root.listFirstHeader = checked }
+            Label { objectName: "cardKitListSaveError"; Layout.fillWidth: true; visible: root.appendSaveError.length > 0; text: root.appendSaveError; color: Theme.danger; wrapMode: Text.WordWrap }
             Label { objectName: "cardKitListSummary"; Layout.fillWidth: true; text: root.listPreview.error.length ? root.cardListError() : root.listPreview.replacesPlaceholder ? qsTr("New cards: %1. The empty starter card will be replaced.").arg(root.listPreview.rows.length) : qsTr("New cards: %1. Existing cards stay as they are.").arg(root.listPreview.rows.length); color: root.listPreview.error.length && root.listPreview.error !== "empty" ? Theme.danger : Theme.text; wrapMode: Text.WordWrap }
             Label { Layout.fillWidth: true; visible: root.listPreview.headerSkipped; text: qsTr("The column heading row is skipped."); color: Theme.muted }
             Label { Layout.fillWidth: true; visible: root.listPreview.duplicateCount > 0; text: qsTr("Repeated titles are kept as separate cards: %1.").arg(root.listPreview.duplicateCount); color: Theme.warning; wrapMode: Text.WordWrap }

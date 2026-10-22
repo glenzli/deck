@@ -54,8 +54,8 @@ ShapeDialog {
                         Layout.fillWidth: true; implicitHeight: copy.implicitHeight + 24; radius: 8; color: Theme.panelRaised; border.color: Theme.border
                         ColumnLayout {
                             id: copy; anchors.fill: parent; anchors.margins: 12; spacing: 6
-                            Label { Layout.fillWidth: true; text: (candidateRow.index + 1) + ". " + candidateRow.modelData.title; color: Theme.text; font.weight: Font.DemiBold; wrapMode: Text.WordWrap }
-                            Label { Layout.fillWidth: true; text: candidateRow.modelData.rules; color: Theme.textSoft; wrapMode: Text.WordWrap }
+                            Label { Layout.fillWidth: true; text: (candidateRow.index + 1) + ". " + candidateRow.modelData.title; textFormat: Text.PlainText; color: Theme.text; font.weight: Font.DemiBold; wrapMode: Text.WordWrap }
+                            Label { Layout.fillWidth: true; text: candidateRow.modelData.rules; textFormat: Text.PlainText; color: Theme.textSoft; wrapMode: Text.WordWrap }
                         }
                     }
                 }

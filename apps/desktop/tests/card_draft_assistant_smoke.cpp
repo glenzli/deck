@@ -28,7 +28,9 @@ bool card_draft_assistant_smoke::verify(const QString& directory) {
     fake.write(R"SH(#!/bin/sh
 case "$(cat "$2")" in
   *'"operation":"probe"'*) echo '{"schema":"deck.cli.result/1","status":"ok","result":{"connected":true,"authorized":true}}' ;;
+  *'"operation":"start"'*'"prompt":"Wrong cancellation"'*) echo '{"schema":"deck.assistant.progress/1","response_id":"job_wrong_confirmation"}'; sleep 2 ;;
   *'"operation":"start"'*) sleep 0.1; echo '{"schema":"deck.assistant.progress/1","response_id":"job_assistant_test"}'; sleep 0.15; echo '{"schema":"deck.cli.result/1","status":"ok","result":{"response_id":"job_assistant_test","status":"completed","cards":[{"title":"Moon","rules":"A natural satellite","art_prompt":"Moon"}]}}' ;;
+  *'"operation":"cancel"'*'"response_id":"job_wrong_confirmation"'*) echo '{"schema":"deck.cli.result/1","status":"ok","result":{"response_id":"job_another_request","cancelled":true}}' ;;
   *'"operation":"cancel"'*) echo '{"schema":"deck.cli.result/1","status":"ok","result":{"response_id":"job_assistant_test","cancelled":true}}' ;;
 esac
 )SH");
@@ -62,6 +64,17 @@ esac
     assistant.discard();
     if (!waitFor([&] { return !assistant.busy(); }) || !assistant.cards().isEmpty()
         || !assistant.targetIdentity().isEmpty() || !assistant.error().isEmpty())
+        return false;
+    if (!assistant.generate("Wrong cancellation", 1, "en", "project|draft-C"))
+        return false;
+    assistant.discard();
+    if (!waitFor([&] { return !assistant.busy(); }) || !assistant.cards().isEmpty()
+        || !assistant.targetIdentity().isEmpty() || assistant.error().isEmpty())
+        return false;
+    if (!assistant.generate("Moon", 1, "en", "project|draft-D"))
+        return false;
+    if (!waitFor([&] { return !assistant.busy(); }) || assistant.cards().size() != 1
+        || assistant.targetIdentity() != "project|draft-D" || !assistant.error().isEmpty())
         return false;
     CardDraftAssistant reopened(fakePath, QDir(directory).filePath("assistant.conf"));
     return reopened.credentialFile() == tokenPath;

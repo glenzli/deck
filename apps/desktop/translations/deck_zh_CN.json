@@ -233,5 +233,17 @@
   "Text above picture": "上文下图",
   "Picture left": "左图右文",
   "Picture right": "左文右图",
-  "Photo & caption": "照片说明"
+  "Photo & caption": "照片说明",
+  "Choose a flexible layout or start a new set before creating cards with AI. The saved cards keep their original layout until you choose.": "使用 AI 创建卡片前，请选择灵活布局或新建卡组。在您选择之前，已保存的卡片会保留原始布局。",
+  "Arrange & export PDF": "拼版并导出 PDF",
+  "The paper margin is the minimum blank space outside the cut lines.": "页边距是裁切线外侧保留的最小空白。",
+  "Cards sit together with a thin seam for light gray dashed cut lines.": "卡片紧贴排列，细缝中使用浅灰色虚线标示裁切位置。",
+  "Cut line width (mm)": "裁切线宽度（毫米）",
+  "Export the PDF, then print at 100% / Actual size.": "导出 PDF 后，请按 100%／原始尺寸打印。",
+  "Export PDF…": "导出 PDF…",
+  "The card gap must be at least as wide as the cut line.": "卡片之间的缝隙不能小于裁切线宽度。",
+  "Reset layout": "重置拼版",
+  "Open PDF": "打开 PDF",
+  "The exported PDF is no longer available. Export it again before opening.": "已导出的 PDF 已移动或不可用。请重新导出后再打开。",
+  "Could not open the exported PDF. Open it from the destination folder.": "无法打开已导出的 PDF，请从保存文件夹中打开。"
 }

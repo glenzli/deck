@@ -2,12 +2,16 @@
 use serde::{Deserialize, Serialize};
 use shape_domain::CardKitRequest;
 
-use super::{CardKitError, CardPrintOptions, CardPrintPaper, micrometres, print_invalid};
+use super::{
+    CardKitError, CardPrintCutLineStyle, CardPrintOptions, CardPrintPaper, cut_line_extent,
+    micrometres, print_invalid,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CardPrintRequestOptions {
     pub paper: CardPrintPaper,
+    pub cut_line_style: CardPrintCutLineStyle,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub card_width_mm: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -24,6 +28,7 @@ impl Default for CardPrintRequestOptions {
         let defaults = CardPrintOptions::default();
         Self {
             paper: defaults.paper,
+            cut_line_style: defaults.cut_line_style,
             card_width_mm: None,
             card_height_mm: None,
             margin_mm: defaults.margin_mm,
@@ -36,12 +41,58 @@ impl Default for CardPrintRequestOptions {
 }
 
 impl CardPrintRequestOptions {
+    /// Fits proportional card faces in a chosen grid, reserving complete cut lines and paper margins.
+    /// # Errors
+    /// Rejects invalid grids, physical measurements and card faces below the minimum printable size.
+    pub fn fit_grid(
+        &mut self,
+        request: &CardKitRequest,
+        columns: usize,
+        rows: usize,
+    ) -> Result<(), CardKitError> {
+        if columns == 0 || rows == 0 || columns.saturating_mul(rows) > super::MAX_SLOTS_PER_PAGE {
+            return Err(print_invalid(
+                "card_print.slot_limit",
+                "choose a bounded positive print grid",
+            ));
+        }
+        request.validate().map_err(CardKitError::Invalid)?;
+        let margin = micrometres(self.margin_mm, 0.0, 50.0)?;
+        let gap = micrometres(self.gap_mm, 0.0, 30.0)?;
+        let offset = micrometres(self.crop_mark_offset_mm, 0.0, 10.0)?;
+        let length = micrometres(self.crop_mark_length_mm, 0.1, 10.0)?;
+        let stroke = micrometres(self.stroke_width_mm, 0.05, 0.5)?;
+        let extent = cut_line_extent(self.cut_line_style, gap, offset, length, stroke)?;
+        let (paper_width, paper_height) = match self.paper {
+            CardPrintPaper::A4 => (210_000.0, 297_000.0),
+            CardPrintPaper::Letter => (215_900.0, 279_400.0),
+        };
+        let columns = f64::from(u16::try_from(columns).expect("bounded print grid"));
+        let rows = f64::from(u16::try_from(rows).expect("bounded print grid"));
+        let max_width =
+            (paper_width - 2.0 * f64::from(margin + extent) - (columns - 1.0) * f64::from(gap))
+                / columns;
+        let max_height =
+            (paper_height - 2.0 * f64::from(margin + extent) - (rows - 1.0) * f64::from(gap))
+                / rows;
+        let (width, height) = canvas(request);
+        let scale = (max_width / width).min(max_height / height);
+        let width = (width * scale).floor() / 1000.0;
+        let height = (height * scale).floor() / 1000.0;
+        micrometres(width, 10.0, 300.0)?;
+        micrometres(height, 10.0, 300.0)?;
+        self.card_width_mm = Some(width);
+        self.card_height_mm = Some(height);
+        Ok(())
+    }
+
     pub(super) fn resolve(
         &self,
         request: &CardKitRequest,
     ) -> Result<CardPrintOptions, CardKitError> {
         let mut options = CardPrintOptions {
             paper: self.paper,
+            cut_line_style: self.cut_line_style,
             card_width_mm: 63.0,
             card_height_mm: 88.0,
             margin_mm: self.margin_mm,
@@ -72,7 +123,14 @@ impl CardPrintRequestOptions {
                 let offset = micrometres(self.crop_mark_offset_mm, 0.0, 10.0)?;
                 let length = micrometres(self.crop_mark_length_mm, 0.1, 10.0)?;
                 let stroke = micrometres(self.stroke_width_mm, 0.05, 0.5)?;
-                let extent = f64::from(offset + length + (stroke + 1) / 2);
+                let gap = micrometres(self.gap_mm, 0.0, 30.0)?;
+                let extent = f64::from(cut_line_extent(
+                    self.cut_line_style,
+                    gap,
+                    offset,
+                    length,
+                    stroke,
+                )?);
                 let (paper_width, paper_height) = match self.paper {
                     CardPrintPaper::A4 => (210_000.0, 297_000.0),
                     CardPrintPaper::Letter => (215_900.0, 279_400.0),
