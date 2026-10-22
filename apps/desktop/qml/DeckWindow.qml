@@ -11,6 +11,7 @@ ApplicationWindow {
     objectName: "deckWindow"
     required property DesktopBackend backend
     required property CardKitController cardKit
+    required property CardLayoutPresetStore layoutPresets
     required property CardPrintController cardPrint
     required property MaterialEditController materialEdit
     required property UiPreferences preferences
@@ -235,6 +236,7 @@ ApplicationWindow {
             backend: window.backend; controller: window.cardKit; cardPrint: window.cardPrint
             materialEdit: window.materialEdit; audioPreview: null; imageTask: window.imageTask
             assistant: window.assistant
+            layoutPresets: window.layoutPresets
             assistantLanguage: window.preferences.languageMode === "zh_CN" || (window.preferences.languageMode === "system" && Qt.locale().name.startsWith("zh")) ? "zh_CN" : "en"
             onAssistantSettingsRequested: settingsDialog.open()
             onProjectsRequested: window.showProjects()

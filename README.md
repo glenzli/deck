@@ -52,6 +52,13 @@ Deck 是制作和打印卡片的桌面工作台。你可以制作识字卡、观
   图片位于文字上方或下方、左右图文并排，以及游戏卡。
 - 卡面比例与实际打印尺寸独立设置。可调整图片填充和占比、字号、水平与垂直对齐、
   文字位置偏移，以及颜色、边框和留白。
+- 将当前版式保存为个人预设，在其他卡片或项目中复用；可批量套用到选中的卡片或整套。
+  批量操作保留文字、图片引用和张数，支持撤销最近一次套用。
+- 复杂卡面可进入**区块编辑**：分别安排标题、正文、图片、类型、费用、数值和风味文字。
+  拖动区块、调整尺寸和前后层次，或输入精确位置；各文字区块可独立设置字号、对齐和样式。
+  区块绑定卡片字段，保存为预设时只保存排版，套用时使用目标卡片自己的内容。
+  每张卡最多 16 个区块；多个图片区块复用该卡的图片，可分别设置完整显示或裁切填充。
+  内容排版、左图右文和游戏卡三种区块起步结构可继续自由调整。
 - 含图片的版式在缺图时显示明确占位。未完成的卡片可以保存为草稿；打印前需补齐图片，
   并处理无法以可读字号放入卡面的文字。
 - 后续编辑保留卡片身份、可恢复草稿和已采用版本。
@@ -67,7 +74,11 @@ Deck 是制作和打印卡片的桌面工作台。你可以制作识字卡、观
 预览和导出 PDF 使用相同排版。导出后在 PDF 阅读器中打开打印设置，按 **100%／原始尺寸**打印。
 当前会话内，各卡组会保留自己的拼版设置，返回编辑后无需重新调整。
 导出时会建议不重名的文件名；导出成功后可点击“打开 PDF”。
-当前实现面向**单面打印**，尚不支持双面对位、出血和混合尺寸装箱。
+在“整套”版式设置中，可选择**统一卡背**：纯色，或项目中的已采用图片。
+采用版本后，可导出仅正面、仅背面或**双面 PDF**。双面页按“第 1 张纸正面、背面，
+第 2 张纸正面、背面……”排列；可选长边／短边翻转，最后一张纸的空位仍与正面对应。
+背面水平和垂直偏移可用于对齐校准。实际打印时选择与 Deck 相同的翻转方向，先试印一张。
+当前不支持逐卡独立卡背、出血和混合尺寸装箱。
 打印缩放会改变卡牌的实际尺寸，请关闭“适应页面”。
 
 ### 语言、外观与 AI
@@ -168,6 +179,14 @@ shortcuts are available. On macOS, drag the Deck label or empty title-bar space 
   framed cards, picture/text arrangements above, below or beside each other, and game cards.
 - Card proportions independent of the physical print size; image fit and share; text size,
   horizontal/vertical alignment, position offsets, colors, borders and spacing.
+- Save a personal layout preset for reuse across cards and projects. Apply it to selected cards
+  or the whole set while retaining text, image references and quantities; undo the latest batch.
+- Use **block editing** for more complex faces: arrange title, body, artwork, type, cost, stats
+  and flavor text separately. Drag, resize, reorder or enter precise positions, with independent
+  text sizing, alignment and styles. Blocks bind to card fields; a saved preset copies layout
+  while each target card keeps its own content.
+  Each card supports up to 16 blocks. Multiple artwork blocks reuse its image with independent
+  contain or cover fitting. Start from content, picture-left or game-card arrangements and adjust them.
 - Clear image placeholders in layouts awaiting artwork. Incomplete cards remain editable drafts;
   missing artwork or text that cannot fit readably must be resolved before printing.
 - Stable card identities, recoverable drafts and accepted versions retained across later edits.
@@ -181,10 +200,15 @@ of each, or repeat one selected card to fill a sheet or reach a chosen copy coun
 Cards sit closely together with a **0.2 mm line gap** by default and share light gray dashed cut
 guides. Adjust the paper margin directly, or use fine adjustments for card size and line width;
 the gap follows the line width. The preview and exported PDF use the same layout. Open the PDF
-in a reader and use its print settings at **100% / actual size**. Current printing is **single-sided**;
-duplex registration, bleed and mixed-size packing are outside the implemented scope. Each card set
+in a reader and use its print settings at **100% / actual size**. Each card set
 keeps its layout choices during the current session, including after returning to editing.
 Exports suggest an unused filename, and **Open PDF** opens the successful export in your PDF reader.
+Choose a **shared card back** in the whole-set layout settings: a solid color or an accepted image
+from the project. After accepting the version, export fronts, backs, or a **duplex PDF**. Duplex
+pages alternate front and back for each physical sheet. Long-edge and short-edge flipping preserve
+the corresponding slots, including empty positions on the last sheet. Horizontal and vertical back
+offsets support alignment calibration. Use the same flip edge in your PDF reader and try one sheet
+first. Per-card backs, bleed and mixed-size packing are not supported.
 Printer scaling changes physical card dimensions,
 so disable “fit to page” when printing the PDF.
 

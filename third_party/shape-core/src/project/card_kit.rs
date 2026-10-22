@@ -1,4 +1,5 @@
 //! Recoverable card-kit authoring over accepted materials, with explicit reviewed acceptance.
+mod back;
 mod draft;
 mod export;
 mod layout;
@@ -8,7 +9,9 @@ mod print;
 pub use draft::CardKitDraft;
 pub use export::CardKitExport;
 pub use print::{
-    CardPrintCutLineStyle, CardPrintOptions, CardPrintPaper, CardPrintPlan, CardPrintRequestOptions,
+    CARD_BACK_RESOURCE_ID, CardPrintCutLineStyle, CardPrintFlipEdge, CardPrintOptions,
+    CardPrintPaper, CardPrintPlan, CardPrintRequestOptions, CardPrintSide, CardPrintSides,
+    CardPrintSidesOptions,
 };
 
 use std::{path::PathBuf, sync::Arc};
@@ -187,7 +190,7 @@ impl ShapeProject {
                 let draft = self.checked_card_kit_draft(artifact_id, &draft_digest)?;
                 let candidate = self.propose_card_kit(artifact_id, &draft_digest)?;
                 Ok(
-                    json!({"draft":draft,"review_digest":candidate.review_digest(),"preview":self.preview_card_kit(&draft.composition, card_id.as_deref())?}),
+                    json!({"draft":draft,"review_digest":candidate.review_digest(),"preview":self.preview_card_kit_with_back(&draft.composition, card_id.as_deref())?}),
                 )
             }
             CardKitAction::Accept {
@@ -209,7 +212,7 @@ impl ShapeProject {
             CardKitAction::Read { source, card_id } => {
                 let composition = self.read_card_kit(source)?;
                 Ok(
-                    json!({"source":source,"preview":self.preview_card_kit(&composition, card_id.as_deref())?,"print_defaults":print::default_options(&composition),"composition":composition}),
+                    json!({"source":source,"preview":self.preview_card_kit_with_back(&composition, card_id.as_deref())?,"print_defaults":print::default_options(&composition),"composition":composition}),
                 )
             }
             CardKitAction::Export {
@@ -359,12 +362,12 @@ impl ShapeProject {
         let mut materials = Vec::new();
         let mut remaining = 128 * 1024 * 1024_u64;
         for source in request.inputs() {
-            let kind = if request.cards.iter().any(|c| c.artwork == Some(source)) {
+            let kind = if request.uses_artwork(source) {
                 ArtifactKind::ImageRaster
             } else {
                 ArtifactKind::TextDocument
             };
-            if request.cards.iter().any(|c| c.artwork == Some(source))
+            if request.uses_artwork(source)
                 && request
                     .cards
                     .iter()
@@ -442,6 +445,24 @@ impl ShapeProject {
             });
         }
         Ok(materials)
+    }
+
+    fn card_kit_visible_materials(
+        &self,
+        request: &CardKitRequest,
+    ) -> Result<Vec<Material>, CardKitError> {
+        request.validate().map_err(invalid)?;
+        let mut visible = request.clone();
+        visible.back = None;
+        for (original, card) in request.cards.iter().zip(&mut visible.cards) {
+            if !layout::shows_artwork(request, original) {
+                card.artwork = None;
+            }
+            if !layout::shows_rules_material(request, original) {
+                card.text_material = None;
+            }
+        }
+        self.card_kit_materials(&visible, false)
     }
 }
 

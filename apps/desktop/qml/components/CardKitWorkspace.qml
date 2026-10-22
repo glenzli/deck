@@ -15,6 +15,7 @@ Page {
     required property ExternalImageTaskController imageTask
     required property MaterialEditController materialEdit
     required property AudioPreviewController audioPreview
+    required property CardLayoutPresetStore layoutPresets
     property var composition: ({cards: []})
     property string selectedCardId: ""
     property bool dirty: false
@@ -71,8 +72,17 @@ Page {
     property bool showArtPrompt: false
     property int inspectorTab: 0
     property bool layoutForSet: false
+    property bool blockEditingRequested: false
+    property bool showBlockLayoutChoices: false
+    property var layoutBatchUndo: null
+    readonly property bool canUndoLayoutBatch: layoutBatchUndoMatches()
     readonly property var currentPreview: (controller.preview.cards || []).find(c => c.id === selectedCardId) || ({})
+    readonly property string currentCardPreviewSource: sessionProject === backend.projectId && sessionPath === backend.bundlePath
+        && controller.preview.selected_card_id === selectedCardId ? controller.previewSource : ""
     readonly property var currentLayout: currentPreview.resolved_layout || ({})
+    readonly property bool blockLayoutCurrent: ((currentCard && currentCard.layout && currentCard.layout.mode)
+        || (composition.layout && composition.layout.mode) || currentLayout.mode) === "blocks"
+    readonly property bool blockEditorActive: (blockLayoutCurrent || blockEditingRequested) && !showBlockLayoutChoices
     readonly property var hiddenContent: currentPreview.hidden_content || ({artwork: false, text_fields: []})
     readonly property bool imageCropLimited: (controller.preview.cards || []).some(card => (card.issues || []).indexOf("image_crop_limit") >= 0)
     readonly property string imageCropMessage: qsTr("Some images are too narrow or wide for edge cropping. Choose Show the complete image, or use artwork with more suitable proportions.")
@@ -89,6 +99,40 @@ Page {
     title: qsTr("Make cards")
     background: Rectangle { color: Theme.window }
 
+    component CardPreviewImage: Image {
+        id: previewImage
+        property string previewIdentity: ""
+        property string candidateSource: ""
+        property string displayedIdentity: ""
+        property string readyIdentity: ""
+        property string readySource: ""
+        readonly property string retainedSource: readyIdentity === previewIdentity ? readySource : ""
+        readonly property bool previewReady: status === Image.Ready && readyIdentity === previewIdentity
+            && readySource === source.toString()
+        fillMode: Image.PreserveAspectFit
+        asynchronous: false
+        retainWhileLoading: true
+
+        function refreshPreviewSource() {
+            if (displayedIdentity !== previewIdentity) {
+                // A ready texture may bridge a refresh, but never a different card or project.
+                retainWhileLoading = false; source = ""
+                readyIdentity = ""; readySource = ""; displayedIdentity = previewIdentity
+                retainWhileLoading = true
+            }
+            if (previewIdentity.length && candidateSource.length) source = candidateSource
+        }
+        function rememberReadyImage() {
+            if (status === Image.Ready && displayedIdentity === previewIdentity && source.toString().length) {
+                readyIdentity = previewIdentity; readySource = source.toString()
+            }
+        }
+        onPreviewIdentityChanged: refreshPreviewSource()
+        onCandidateSourceChanged: refreshPreviewSource()
+        onStatusChanged: rememberReadyImage()
+        Component.onCompleted: { refreshPreviewSource(); rememberReadyImage() }
+    }
+
     function menuIdentity(includeCard) { return JSON.stringify([backend.projectId, backend.bundlePath, controller.draft.artifact_id || "", includeCard ? selectedCardId : ""]) }
     function copy(value) { return JSON.parse(JSON.stringify(value)) }
     function pin(item) { return {artifact_id: item.id, revision_id: item.acceptedRevisionId} }
@@ -96,8 +140,10 @@ Page {
         composition = copy(controller.draft.composition || {cards: []})
         if (!cards.some(c => c.id === selectedCardId)) selectedCardId = cards.length ? cards[0].id : ""
         dirty = false
+        if (layoutBatchUndo && !layoutBatchUndoMatches()) layoutBatchUndo = null
     }
     function changed(next) {
+        layoutBatchUndo = null
         composition = next; dirty = true; localError = ""
         controller.invalidateReview(); saveTimer.restart()
     }
@@ -105,21 +151,132 @@ Page {
         if (composition[key] === value) return
         const next = copy(composition); next[key] = value; changed(next)
     }
-    function setCardField(key, value) {
-        if (!currentCard || currentCard[key] === value) return
+    function setCardField(key, value, saveImmediately = false) {
+        if (!currentCard) return false
+        if (currentCard[key] === value) return true
         if (key === "layout" && value && !composition.layout) {
-            localError = qsTr("Choose a flexible default layout for this set before changing a card’s layout."); return
+            localError = qsTr("Choose a flexible default layout for this set before changing a card’s layout."); return false
+        }
+        if (!saveImmediately && key === "layout" && value && value.mode !== "blocks" && value.blocks === undefined
+            && currentCard.layout && currentCard.layout.blocks !== undefined) {
+            value = copy(value); value.blocks = copy(currentCard.layout.blocks)
         }
         const next = copy(composition), index = next.cards.findIndex(c => c.id === selectedCardId)
         next.cards[index][key] = value
         if (key === "rules") next.cards[index].text_material = null
-        changed(next)
+        if (JSON.stringify(next) === JSON.stringify(composition)) return true
+        if (saveImmediately) {
+            saveTimer.stop()
+            if (!controller.save(next)) return false
+            localError = ""; if (visible) previewTimer.restart(); return true
+        }
+        changed(next); return true
     }
     function flush() {
         saveTimer.stop()
         if (!dirty) return true
         if (!controller.save(composition)) return false
         dirty = false; if (visible) previewTimer.restart(); return true
+    }
+    function layoutContextIdentity() {
+        return JSON.stringify([backend.projectId, backend.bundlePath, controller.draft.artifact_id || "",
+            controller.draft.draft_digest || "", composition])
+    }
+    function blockContextIdentity() {
+        return JSON.stringify([layoutContextIdentity(), selectedCardId, controller.source])
+    }
+    function commitBlockLayout(value, identity) {
+        if (dirty || identity !== blockContextIdentity() || !currentCard || !composition.layout) {
+            localError = qsTr("The card changed. Reopen the block editor before changing its layout."); return false
+        }
+        return setCardField("layout", value, true)
+    }
+    function openBlockEditor() {
+        if (!flush() || !currentCard) return false
+        if (!composition.layout) {
+            localError = qsTr("Choose a flexible default layout for this set before changing a card’s layout.")
+            setLayoutDialog.open(); return false
+        }
+        if (!controller.showCard(selectedCardId)) return false
+        inspectorTab = 1; layoutForSet = false; showBlockLayoutChoices = false; blockEditingRequested = true
+        return blockEditor.enter()
+    }
+    function openPresetSave(perCard) {
+        if (perCard && (blockEditor.gestureActive || blockEditor.pendingLayout !== null)) {
+            localError = qsTr("Finish or discard the current block change before using presets."); return false
+        }
+        if (!flush()) return false
+        if (!composition.layout) {
+            localError = qsTr("Choose a flexible layout before saving or applying presets."); setLayoutDialog.open(); return false
+        }
+        if (!controller.showCard(selectedCardId)) return false
+        const value = perCard ? currentLayout : controller.preview.default_layout || ({})
+        presetSave.openForLayout(value, layoutContextIdentity()); return true
+    }
+    function openBatchLayout() {
+        if (blockEditor.gestureActive || blockEditor.pendingLayout !== null) {
+            localError = qsTr("Finish or discard the current block change before using presets."); return false
+        }
+        if (!flush()) return false
+        if (!composition.layout) {
+            localError = qsTr("Choose a flexible layout before saving or applying presets."); setLayoutDialog.open(); return false
+        }
+        batchLayout.openForCards(cards, selectedCardId, layoutContextIdentity()); return true
+    }
+    function layoutBatchUndoMatches() {
+        return !!layoutBatchUndo && !dirty && layoutBatchUndo.context === menuIdentity(false)
+            && layoutBatchUndo.digest === (controller.draft.draft_digest || "")
+            && layoutBatchUndo.source === JSON.stringify(controller.source)
+            && layoutBatchUndo.after === JSON.stringify(composition)
+    }
+    function applyLayoutToCards(configuration, cardIds, identity) {
+        if (dirty || identity !== layoutContextIdentity() || !composition.layout) {
+            localError = qsTr("The card set changed. Reopen this window before applying a layout.")
+            batchLayout.error = localError; return false
+        }
+        const layout = layoutPresets.validatedConfiguration(configuration), ids = new Set(cardIds)
+        if (!Object.keys(layout).length || !ids.size || ids.size !== cardIds.length
+            || cardIds.some(id => !cards.some(card => card.id === id))) return false
+        const before = copy(composition), next = copy(composition)
+        for (const card of next.cards) if (ids.has(card.id)) card.layout = copy(layout)
+        if (JSON.stringify(next) === JSON.stringify(composition)) { batchLayout.close(); return true }
+        saveTimer.stop()
+        if (!controller.save(next)) { batchLayout.error = controller.error; return false }
+        layoutBatchUndo = {context: menuIdentity(false), before: before, after: JSON.stringify(composition),
+            digest: controller.draft.draft_digest || "", source: JSON.stringify(controller.source)}
+        localError = ""; if (visible) previewTimer.restart(); batchLayout.close(); return true
+    }
+    function undoLayoutBatch() {
+        if (!layoutBatchUndoMatches()) {
+            localError = qsTr("The cards changed after the batch. Your later edits were kept."); return false
+        }
+        const previous = copy(layoutBatchUndo.before)
+        saveTimer.stop()
+        if (!controller.save(previous)) return false
+        layoutBatchUndo = null; localError = ""; if (visible) previewTimer.restart(); return true
+    }
+    function setBackConfiguration(value) {
+        if (sessionProject !== backend.projectId || sessionPath !== backend.bundlePath) return false
+        const next = copy(composition)
+        if (value) next.back = copy(value)
+        else delete next.back
+        if (JSON.stringify(next) === JSON.stringify(composition)) return true
+        changed(next); return true
+    }
+    function beginBackImageImport() {
+        if (!composition.back || composition.back.mode !== "image" || !flush()) return false
+        backImport.targetIdentity = layoutContextIdentity(); backImport.open(); return true
+    }
+    function importBackArtwork(file, identity) {
+        if (identity !== layoutContextIdentity() || !composition.back || composition.back.mode !== "image") return false
+        const previous = new Set(backend.artifacts.map(item => item.id))
+        if (!backend.importRaster(file)) return false
+        const added = backend.artifacts.filter(item => !previous.has(item.id) && item.kindKey === "image_raster" && item.hasAcceptedRevision)
+        if (added.length !== 1) {
+            localError = qsTr("The image was imported. Choose it from the project’s accepted images for the card back."); return false
+        }
+        const next = copy(composition.back); next.artwork = pin(added[0])
+        return setBackConfiguration(next) && flush()
     }
     function openWorkspace(artifactId) {
         if (sessionProject !== backend.projectId || sessionPath !== backend.bundlePath) {
@@ -500,6 +657,7 @@ Page {
     onArtworkCandidateChanged: updateArtworkPreview()
     onSelectedCardIdChanged: {
         showHiddenText = false
+        blockEditingRequested = false; showBlockLayoutChoices = false
         imageMenu.close(); cardActions.close()
         if (!dirty && selectedCardId.length) controller.showCard(selectedCardId)
     }
@@ -521,6 +679,8 @@ Page {
                 saveTimer.stop(); previewTimer.stop(); root.dirty = false; root.close()
                 shapeTaskDialog.close(); refinementDialog.close(); root.clearArtwork()
                 assistantDialog.close(); root.assistant.discard()
+                presetSave.close(); batchLayout.close(); backImport.close(); root.layoutBatchUndo = null
+                root.blockEditingRequested = false; root.showBlockLayoutChoices = false; blockEditor.cancelGesture()
                 listDialog.close(); largePreview.close(); imageImport.close(); zipExport.close(); printDialog.close(); setLayoutDialog.close()
             }
         }
@@ -546,6 +706,19 @@ Page {
         onAccepted: {
             root.importArtwork(selectedFile, cardId, projectId, kitId, projectPath)
         }
+    }
+    FileDialog {
+        id: backImport
+        objectName: "cardBackImportDialog"
+        property string targetIdentity: ""
+        title: qsTr("Choose card back artwork")
+        nameFilters: [qsTr("Images (*.png *.jpg *.jpeg)")]
+        onAccepted: root.importBackArtwork(selectedFile, targetIdentity)
+    }
+    CardPresetSaveDialog { id: presetSave; store: root.layoutPresets; currentIdentity: root.layoutContextIdentity() }
+    CardLayoutBatchDialog {
+        id: batchLayout; store: root.layoutPresets; currentIdentity: root.layoutContextIdentity()
+        onApplyRequested: (configuration, cardIds, identity) => root.applyLayoutToCards(configuration, cardIds, identity)
     }
     FileDialog {
         id: zipExport
@@ -607,7 +780,13 @@ Page {
                                 Rectangle {
                                     Layout.preferredWidth: 29; Layout.preferredHeight: 39
                                     radius: 3; color: Theme.panelRaised; border.color: Theme.border
-                                    Image { anchors.fill: parent; source: root.selectedCardId === cardRow.card.id ? root.controller.previewSource : ""; fillMode: Image.PreserveAspectFit }
+                                    CardPreviewImage {
+                                        objectName: "cardKitThumbnail-" + (cardRow.card.id || "")
+                                        anchors.fill: parent
+                                        previewIdentity: root.selectedCardId === cardRow.card.id ? root.menuIdentity(true) : ""
+                                        candidateSource: root.selectedCardId === cardRow.card.id
+                                            ? root.blockEditorActive ? blockEditor.displaySource : root.currentCardPreviewSource : ""
+                                    }
                                     Label { anchors.centerIn: parent; visible: root.selectedCardId !== cardRow.card.id; text: cardRow.card.artwork ? "▧" : "Aa"; font.pixelSize: 11; color: Theme.muted }
                                 }
                                 ColumnLayout {
@@ -661,14 +840,24 @@ Page {
                         width: cardFace.paintedWidth + 3; height: cardFace.paintedHeight + 3
                         radius: 2; visible: cardFace.status === Image.Ready; color: Theme.shadowSoft
                     }
-                    Image {
+                    CardPreviewImage {
                         id: cardFace
                         objectName: "cardKitPreviewImage"
                         anchors.fill: parent; anchors.leftMargin: 34; anchors.rightMargin: 34; anchors.topMargin: 8; anchors.bottomMargin: 28
-                        source: root.controller.previewSource; fillMode: Image.PreserveAspectFit; asynchronous: false
+                        previewIdentity: root.currentCard ? root.menuIdentity(true) : ""
+                        candidateSource: root.blockEditorActive ? blockEditor.displaySource : root.currentCardPreviewSource
                     }
-                    Label { anchors.centerIn: parent; width: parent.width - 60; visible: !root.controller.previewSource.length; text: qsTr("Your card will appear here as you edit."); wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter; color: Theme.muted }
-                    MouseArea { anchors.fill: cardFace; enabled: root.controller.previewSource.length > 0; cursorShape: Qt.PointingHandCursor; onDoubleClicked: root.openLargePreview() }
+                    Label { anchors.centerIn: parent; width: parent.width - 60; visible: !cardFace.source.toString().length; text: qsTr("Your card will appear here as you edit."); wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter; color: Theme.muted }
+                    MouseArea { anchors.fill: cardFace; enabled: !blockOverlay.visible && root.controller.previewSource.length > 0; cursorShape: Qt.PointingHandCursor; onDoubleClicked: root.openLargePreview() }
+                    CardBlockOverlay {
+                        id: blockOverlay
+                        editor: blockEditor
+                        x: cardFace.x + (cardFace.width - cardFace.paintedWidth) / 2
+                        y: cardFace.y + (cardFace.height - cardFace.paintedHeight) / 2
+                        width: cardFace.paintedWidth; height: cardFace.paintedHeight
+                        visible: root.blockEditorActive && root.inspectorTab === 1 && !root.layoutForSet && width > 0 && height > 0
+                        enabled: blockEditor.editingEnabled
+                    }
                 }
                 Rectangle {
                     Layout.fillWidth: true; implicitHeight: 38; color: Theme.canvas
@@ -774,15 +963,37 @@ Page {
                                     ShapeButton { objectName: "deckCardLayoutScope"; Layout.fillWidth: true; expanded: true; quiet: true; selected: !root.layoutForSet; text: qsTr("This card"); onClicked: root.layoutForSet = false }
                                     ShapeButton { objectName: "cardKitSetLayout"; Layout.fillWidth: true; expanded: true; quiet: true; selected: root.layoutForSet; text: qsTr("Whole set"); onClicked: root.layoutForSet = true }
                                 }
+                                CardBlockEditor {
+                                    id: blockEditor
+                                    visible: !root.layoutForSet && root.blockEditorActive
+                                    Layout.fillWidth: true
+                                    configuration: root.currentCard ? root.currentCard.layout || null : null
+                                    resolvedLayout: root.currentLayout
+                                    card: root.currentCard || ({})
+                                    targetIdentity: root.blockContextIdentity()
+                                    cardIdentity: root.menuIdentity(true)
+                                    svgSource: root.currentCardPreviewSource
+                                    editingEnabled: root.visible && root.inspectorTab === 1 && !root.layoutForSet && !!root.composition.layout
+                                    commitConfiguration: (value, identity) => root.commitBlockLayout(value, identity)
+                                    onChooseLayoutRequested: root.showBlockLayoutChoices = true
+                                    onContentRequested: root.inspectorTab = 0
+                                    onSavePresetRequested: root.openPresetSave(true)
+                                    onBatchRequested: root.openBatchLayout()
+                                }
                                 CardLayoutOptions {
                                     objectName: "cardKitCardLayoutOptions"
-                                    visible: !root.layoutForSet
+                                    presetStore: root.layoutPresets; canUndoBatch: root.canUndoLayoutBatch
+                                    visible: !root.layoutForSet && !root.blockEditorActive
                                     Layout.fillWidth: true; perCard: true; enabled: !!root.composition.layout
                                     configuration: root.currentCard ? root.currentCard.layout || null : null
                                     resolved: root.currentLayout
                                     editIdentity: root.backend.projectId + "|" + root.backend.bundlePath + "|" + (root.controller.draft.artifact_id || "") + "|" + root.selectedCardId
                                     editingEnabled: root.visible && root.inspectorTab === 1 && !root.layoutForSet && !!root.composition.layout
-                                    onEdited: value => root.setCardField("layout", value)
+                                    onEdited: value => { root.blockEditingRequested = false; root.showBlockLayoutChoices = false; root.setCardField("layout", value) }
+                                    onEditBlocksRequested: root.openBlockEditor()
+                                    onSavePresetRequested: root.openPresetSave(true)
+                                    onBatchRequested: root.openBatchLayout()
+                                    onUndoBatchRequested: root.undoLayoutBatch()
                                 }
                                 Label { Layout.fillWidth: true; visible: !root.layoutForSet && !root.composition.layout; text: qsTr("These cards use their original layout. Choose Whole set to switch to a flexible layout."); color: Theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 11 }
                                 ColumnLayout {
@@ -808,6 +1019,17 @@ Page {
                                     }
                                     Label { text: qsTr("Card set name"); color: Theme.textSoft; font.pixelSize: 11 }
                                     ShapeTextField { objectName: "cardKitName"; Layout.fillWidth: true; text: root.composition.name || ""; placeholderText: qsTr("Name this card set"); onTextEdited: root.setField("name", text) }
+                                    CardBackEditor {
+                                        Layout.fillWidth: true; backend: root.backend
+                                        configuration: root.composition.back || null
+                                        editIdentity: root.menuIdentity(false)
+                                        editingEnabled: root.visible && root.inspectorTab === 1 && root.layoutForSet
+                                        canvasWidth: root.currentLayout.canvas_width || root.composition.canvas_width || 750
+                                        canvasHeight: root.currentLayout.canvas_height || root.composition.canvas_height || 1050
+                                        previewSvg: (root.controller.preview.back || {}).svg || ""
+                                        onEdited: value => root.setBackConfiguration(value)
+                                        onImportRequested: root.beginBackImageImport()
+                                    }
                                     Label { text: qsTr("Card proportions"); color: Theme.textSoft; font.pixelSize: 11 }
                                     ShapeComboBox {
                                         objectName: "cardKitShape"; Layout.fillWidth: true
@@ -835,10 +1057,14 @@ Page {
                                     Label { Layout.fillWidth: true; visible: !root.composition.layout; text: qsTr("Choosing new proportions or a flexible layout changes the appearance of these original cards. Their text and images are kept."); color: Theme.warning; wrapMode: Text.WordWrap; font.pixelSize: 11 }
                                     CardLayoutOptions {
                                         objectName: "cardKitDefaultLayoutOptions"; Layout.fillWidth: true
+                                        presetStore: root.layoutPresets; canUndoBatch: root.canUndoLayoutBatch
                                         configuration: root.composition.layout || null; resolved: root.controller.preview.default_layout || ({})
                                         editIdentity: root.backend.projectId + "|" + root.backend.bundlePath + "|" + (root.controller.draft.artifact_id || "") + "|default"
                                         editingEnabled: root.visible && root.inspectorTab === 1 && root.layoutForSet
                                         onEdited: value => root.setField("layout", value)
+                                        onSavePresetRequested: root.openPresetSave(false)
+                                        onBatchRequested: root.openBatchLayout()
+                                        onUndoBatchRequested: root.undoLayoutBatch()
                                     }
                                     ToolButton { text: (setLayoutDialog.promptsExpanded ? "⌄  " : "›  ") + qsTr("Creative direction"); font.pixelSize: 11; onClicked: setLayoutDialog.promptsExpanded = !setLayoutDialog.promptsExpanded }
                                     ColumnLayout {

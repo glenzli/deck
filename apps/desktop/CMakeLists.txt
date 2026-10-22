@@ -49,6 +49,7 @@ qt_add_executable(deck-desktop
     src/main.cpp src/deck_cli_client.cpp src/deck_cli_client.hpp
     src/icon_image_provider.cpp src/icon_image_provider.hpp
     src/card_draft_assistant.cpp src/card_draft_assistant.hpp
+    src/card_layout_preset_store.cpp src/card_layout_preset_store.hpp
     src/deck_document_controller.cpp src/deck_document_controller.hpp
     src/deck_exchange_controller.cpp src/deck_exchange_controller.hpp
     src/external_image_task_controller.cpp src/external_image_task_controller.hpp
@@ -56,6 +57,9 @@ qt_add_executable(deck-desktop
     src/card_print_export.cpp src/card_print_export.hpp
     tests/deck_native_smoke.cpp tests/deck_native_smoke.hpp
     tests/card_draft_assistant_smoke.cpp tests/card_draft_assistant_smoke.hpp
+    tests/card_layout_preset_store_smoke.cpp tests/card_layout_preset_store_smoke.hpp
+    tests/card_layout_workflow_smoke.cpp tests/card_layout_workflow_smoke.hpp
+    tests/card_block_workflow_smoke.cpp tests/card_block_workflow_smoke.hpp
     "${upstream}/src/desktop_backend.cpp" "${upstream}/src/desktop_backend.hpp"
     "${upstream}/src/card_kit_controller.cpp" "${upstream}/src/card_kit_controller.hpp"
     src/card_print_controller.cpp src/card_print_controller.hpp
@@ -77,6 +81,9 @@ qt_add_qml_module(deck-desktop URI Shape.Desktop VERSION 1.0
         qml/components/ShapeSpinBox.qml qml/components/ShapeCheckBox.qml
         qml/components/ShapeMenu.qml qml/components/ShapeMenuItem.qml qml/components/ShapeMenuSeparator.qml
         qml/components/CardLayoutPresets.qml qml/components/CardSheetPresets.qml
+        qml/components/CardPresetSaveDialog.qml qml/components/CardLayoutBatchDialog.qml
+        qml/components/CardBackEditor.qml
+        qml/components/CardBlockEditor.qml qml/components/CardBlockOverlay.qml
     RESOURCES ${icons})
 # Keep runtime/window branding and the macOS bundle on the same approved artwork.
 qt_add_resources(deck-desktop deck-app-branding

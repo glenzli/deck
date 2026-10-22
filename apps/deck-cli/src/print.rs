@@ -3,7 +3,9 @@
 use crate::{Result, fail};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use shape_core::{CardPrintRequestOptions, ShapeProject};
+use shape_core::{
+    CardPrintFlipEdge, CardPrintRequestOptions, CardPrintSides, CardPrintSidesOptions, ShapeProject,
+};
 use shape_domain::{CardKitRequest, WorkingInput};
 use std::collections::BTreeMap;
 
@@ -24,6 +26,17 @@ pub struct Imposition {
     pub content: Content,
     pub card_id: Option<String>,
     pub copies: Option<u16>,
+    #[serde(skip_serializing_if = "CardPrintSides::is_fronts")]
+    pub sides: CardPrintSides,
+    #[serde(skip_serializing_if = "CardPrintFlipEdge::is_long")]
+    pub flip_edge: CardPrintFlipEdge,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub back_offset_x_mm: f64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub back_offset_y_mm: f64,
+}
+fn is_zero(value: &f64) -> bool {
+    *value == 0.0
 }
 
 #[derive(Deserialize)]
@@ -125,14 +138,13 @@ fn plan(
     if let Some((columns, rows)) = dimensions {
         options.fit_grid(&composition, columns, rows)?;
     }
-    // Admit the requested job before the pinned owner loads or renders its selected resources.
-    // Automatic fill needs one admitted copy first to discover the physical sheet capacity.
-    let copies = select_copies(
-        &composition,
-        &imposition,
-        dimensions.map_or(1, |(c, r)| c * r),
-    )?;
-    if dimensions.is_some_and(|(c, r)| copies.len().div_ceil(c * r) > 256) {
+    // Resolve capacity with geometry alone, then admit the exact requested copies before resources.
+    let (columns, rows) = match dimensions {
+        Some(grid) => grid,
+        None => options.grid_dimensions(&composition)?,
+    };
+    let copies = select_copies(&composition, &imposition, columns * rows)?;
+    if copies.len().div_ceil(columns * rows) > 256 {
         return Err(fail(
             "print_pages",
             "card_print.page_limit: too many copies or pages",
@@ -144,12 +156,14 @@ fn plan(
     }
     let selection: Vec<_> = selected_quantities.into_iter().collect();
     // The upstream service remains the owner of content readiness, SVGs and crop clearance.
-    let mut plan = project.plan_card_print_selection_request(source, &options, &selection)?;
-    let columns = dimensions.map_or(plan.columns, |v| v.0);
-    let rows = dimensions.map_or(plan.rows, |v| v.1);
-    let capacity = columns * rows;
-    let copies = select_copies(&composition, &imposition, capacity)?;
-    plan.impose_grid(columns, rows, &copies)?;
+    let sides = CardPrintSidesOptions {
+        sides: imposition.sides,
+        flip_edge: imposition.flip_edge,
+        back_offset_x_mm: imposition.back_offset_x_mm,
+        back_offset_y_mm: imposition.back_offset_y_mm,
+    };
+    let plan =
+        project.plan_card_print_job_request(source, &options, &selection, dimensions, &sides)?;
     let mut plan = serde_json::to_value(plan)?;
     plan["imposition"] = json!(imposition);
     Ok(plan)

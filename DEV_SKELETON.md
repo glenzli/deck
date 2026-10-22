@@ -12,6 +12,14 @@ own implementation facts. This initial repository is under active development.
 - Deck's application shell owns card navigation, project selection, user settings and presentation.
   The icon image provider rasterizes packaged UI vectors at physical pixel density with theme
   tinting; it is independent of the card artwork preview and print owners.
+- `CardLayoutPresetStore` owns the personal layout library beside application settings, with
+  bounded JSON, atomic writes and a short file lock. Presets contain resolved layout settings,
+  never card text or material pins. Workspace batch application uses stable card IDs and one
+  draft save; its local undo checks the target state before restoring layouts.
+- Block layouts extend the existing CardKit layout contract. Ordered, bounded rectangles bind
+  to card fields rather than copying content. The domain validates geometry and styles, and the
+  core renders both the authoring SVG and physical PDF faces. The QML editor owns selection,
+  transient gestures and guarded commits; it does not introduce another card renderer or store.
 - The pinned CardKit domain/core owners, adapted under `third_party/shape-domain` and
   `third_party/shape-core`, own card data, recoverable drafts, preview, accepted versions and
   card-face/print geometry. The reused Qt print owner paints both preview and PDF.
@@ -23,11 +31,13 @@ own implementation facts. This initial repository is under active development.
   vendored owners retain their complete crate boundaries and MIT licenses; `shape-cardkit-provenance.json`
   lists base file hashes and intentional adaptations. CLI and native bridge resolve the same Cargo
   patches. Image placeholders are authoring aids; missing artwork still blocks printing.
-- Deck's transient sheet choices live in the CLI print owner, shared by desktop preparation and
-  PDF commands. It fits a chosen grid, selects copies and translates the pinned planner's admitted
-  slot template. The pinned print owner also supplies shared dashed cut-guide geometry for tightly
-  packed sheets, alongside compatible corner marks. Card rendering, readable text checks and the
-  single Qt painter stay reused; preview and PDF consume the same physical coordinates.
+- Deck's transient sheet choices are admitted by the CLI print owner, shared by desktop preparation
+  and PDF commands. The core planner fits a chosen grid and supplies shared dashed cut guides for
+  tightly packed sheets, alongside compatible corner marks. It owns duplex slot reflection, empty
+  slot preservation, back calibration and front/back page order. Authored shared backs belong to
+  the CardKit domain and accepted material lifecycle; they are separate from sheet choices.
+  Qt validates the plan and paints its coordinates without a second layout calculation. Card
+  rendering, readable text checks and the single preview/PDF painter stay reused.
 - The card draft assistant owns asynchronous text-candidate lifecycle and cancellation. The
   packaged CLI's assistant owner uses the pinned official Infer Runtime SDK for discovery,
   authentication, exact contracts and local-only requests. It never writes project content;
@@ -35,12 +45,14 @@ own implementation facts. This initial repository is under active development.
 
 ## Initial scope
 
-Flexible text, image and combined cards; quantities; image/table intake; card-size settings;
-single-sided home-print sheets with crop marks; independent open/save; selected-material
-integration; machine-readable actions and output verification.
+Flexible text, image and field-bound block cards; quantities; image/table intake; card-size settings;
+home-print sheets with shared cut guides; personal presets and batch layouts; shared image or
+solid card backs; single-sided or duplex PDF; independent open/save; selected-material integration;
+machine-readable actions and output verification.
 
-Duplex registration, bleed, mixed-size packing, a game engine, a general plugin SDK and a
-professional desktop publishing engine are separate future decisions.
+Bleed, mixed-size packing, per-card backs, a game engine, a general plugin SDK and a professional
+desktop publishing engine are separate future decisions. Back offsets aid physical calibration;
+the PDF workflow does not operate printers or guarantee their mechanical alignment.
 
 ## Compatibility
 

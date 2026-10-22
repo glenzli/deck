@@ -29,6 +29,10 @@ ShapeDialog {
     property int contentMode: 0
     property bool fillSheet: true
     property int repeatCopies: 9
+    property int sideMode: 0
+    property int flipEdge: 0
+    property real backOffsetX: 0
+    property real backOffsetY: 0
     property bool advanced: false
     readonly property string problemTitle: {
         const card = cardChoices.find(c => c.id === controller.problemCardId)
@@ -55,7 +59,8 @@ ShapeDialog {
         if (!layoutIdentity.length) return
         const settings = {options: printOptions(), sizeAnchor: sizeAnchor, keepProportions: keepProportions,
             gridColumns: gridColumns, gridRows: gridRows, contentMode: contentMode, fillSheet: fillSheet,
-            repeatCopies: repeatCopies, selectedCardId: selectedCardId, advanced: advanced}
+            repeatCopies: repeatCopies, selectedCardId: selectedCardId, advanced: advanced,
+            sideMode: sideMode, flipEdge: flipEdge, backOffsetX: backOffsetX, backOffsetY: backOffsetY}
         const next = sessionLayouts.filter(item => item.key !== layoutIdentity)
         next.unshift({key: layoutIdentity, settings: settings})
         sessionLayouts = next.slice(0, 24)
@@ -69,6 +74,10 @@ ShapeDialog {
         gridColumns = settings ? settings.gridColumns : 3; gridRows = settings ? settings.gridRows : 3
         contentMode = settings ? settings.contentMode : 0; fillSheet = settings ? settings.fillSheet : true
         repeatCopies = settings ? settings.repeatCopies : 9; advanced = settings ? settings.advanced : false
+        sideMode = settings ? settings.sideMode || 0 : 0
+        flipEdge = settings ? settings.flipEdge || 0 : 0
+        backOffsetX = settings ? settings.backOffsetX || 0 : 0
+        backOffsetY = settings ? settings.backOffsetY || 0 : 0
         const preferred = settings ? settings.selectedCardId : selectedId
         selectedCardId = cardChoices.some(c => c.id === preferred) ? preferred
             : cardChoices.some(c => c.id === selectedId) ? selectedId : cardChoices.length ? cardChoices[0].id : ""
@@ -134,6 +143,12 @@ ShapeDialog {
         rememberLayout()
         const request = printOptions()
         const imposition = {content: ["quantities", "one_each", "repeat"][contentMode]}
+        if (sideMode > 0) {
+            imposition.sides = ["fronts", "duplex", "backs"][sideMode]
+            imposition.flip_edge = flipEdge === 1 ? "short" : "long"
+            imposition.back_offset_x_mm = backOffsetX
+            imposition.back_offset_y_mm = backOffsetY
+        }
         if (gridColumns > 0) { imposition.columns = gridColumns; imposition.rows = gridRows }
         if (contentMode === 2) {
             imposition.card_id = selectedCardId
@@ -207,7 +222,25 @@ ShapeDialog {
                             onValueModified: root.setOption("margin_mm", value / 10)
                         }
                     }
-                    Label { Layout.fillWidth: true; text: qsTr("The paper margin is the minimum blank space outside the cut lines."); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+                    Label { Layout.fillWidth: true; text: qsTr("The paper margin is the minimum blank space outside the front cut lines."); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+                    Label { text: qsTr("Print sides"); color: Theme.text; font.weight: Font.DemiBold; Layout.topMargin: 4 }
+                    ShapeComboBox {
+                        objectName: "cardPrintSides"; Layout.fillWidth: true
+                        model: [qsTr("Fronts only"), qsTr("Fronts & backs"), qsTr("Backs only")]
+                        selectedIndex: root.sideMode
+                        onActivated: index => { root.sideMode = index; root.queueRefresh() }
+                    }
+                    RowLayout {
+                        visible: root.sideMode > 0; Layout.fillWidth: true; spacing: 8
+                        Label { text: qsTr("Flip edge"); color: Theme.textSoft; font.pixelSize: 11 }
+                        ShapeComboBox {
+                            objectName: "cardPrintFlipEdge"; Layout.fillWidth: true
+                            model: [qsTr("Long edge"), qsTr("Short edge")]
+                            selectedIndex: root.flipEdge
+                            onActivated: index => { root.flipEdge = index; root.queueRefresh() }
+                        }
+                    }
+                    Label { Layout.fillWidth: true; visible: root.sideMode === 1; text: qsTr("Use the same flip edge when printing both sides of the PDF."); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
                     Label { text: qsTr("Cards on the sheet"); color: Theme.text; font.weight: Font.DemiBold; Layout.topMargin: 4 }
                     ShapeComboBox {
                         objectName: "cardPrintContent"; Layout.fillWidth: true
@@ -288,6 +321,32 @@ ShapeDialog {
                                 }
                             }
                         }
+                        ColumnLayout {
+                            visible: root.sideMode > 0; Layout.fillWidth: true; spacing: 8
+                            Label { text: qsTr("Back alignment"); color: Theme.text; font.weight: Font.DemiBold }
+                            Repeater {
+                                model: [
+                                    {key: "backOffsetX", objectName: "cardPrintBackOffsetX", label: qsTr("Back horizontal offset (mm)")},
+                                    {key: "backOffsetY", objectName: "cardPrintBackOffsetY", label: qsTr("Back vertical offset (mm)")}
+                                ]
+                                delegate: RowLayout {
+                                    id: backOffsetRow
+                                    required property var modelData
+                                    Layout.fillWidth: true; spacing: 8
+                                    Label { Layout.fillWidth: true; text: backOffsetRow.modelData.label; color: Theme.textSoft; font.pixelSize: 11; wrapMode: Text.WordWrap }
+                                    ShapeSpinBox {
+                                        objectName: backOffsetRow.modelData.objectName
+                                        from: -10000; to: 10000; stepSize: 100
+                                        value: Math.round(root[backOffsetRow.modelData.key] * 1000)
+                                        validator: DoubleValidator { bottom: -10; top: 10; decimals: 3; notation: DoubleValidator.StandardNotation }
+                                        textFromValue: (value, locale) => Number(value / 1000).toLocaleString(locale, 'f', 3)
+                                        valueFromText: (text, locale) => Math.round(Number.fromLocaleString(locale, text) * 1000)
+                                        onValueModified: { root[backOffsetRow.modelData.key] = value / 1000; root.queueRefresh() }
+                                    }
+                                }
+                            }
+                            Label { Layout.fillWidth: true; text: qsTr("Positive offsets move the back right or down on the preview."); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+                        }
                         ShapeButton { objectName: "cardPrintReset"; text: qsTr("Reset layout"); quiet: true; onClicked: root.resetLayout() }
                     }
                 }
@@ -299,6 +358,7 @@ ShapeDialog {
                     Label { Layout.fillWidth: true; text: qsTr("Sheet preview"); color: Theme.text; font.weight: Font.DemiBold }
                     Label { objectName: "cardPrintSizeSummary"; text: root.controller.ready ? qsTr("%1 × %2 mm per card").arg(Number(root.options.card_width_mm).toFixed(1)).arg(Number(root.options.card_height_mm).toFixed(1)) : qsTr("Layout guide"); color: Theme.muted; font.pixelSize: 11 }
                 }
+                Label { objectName: "cardPrintSheetSide"; visible: root.controller.ready; text: root.controller.pageSide === "back" ? qsTr("Sheet %1 · Back").arg(root.controller.sheetIndex + 1) : qsTr("Sheet %1 · Front").arg(root.controller.sheetIndex + 1); color: Theme.textSoft; font.pixelSize: 11 }
                 Rectangle {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     color: Theme.panelInset; radius: Theme.panelRadius; border.color: Theme.border
@@ -320,7 +380,7 @@ ShapeDialog {
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { objectName: "cardPrintSummary"; Layout.fillWidth: true; text: root.controller.ready ? qsTr("%1 cards / sheet · %2 copies · %3 pages").arg(root.controller.plan.slots_per_page).arg(root.controller.plan.total_copies).arg(root.controller.plan.page_count) : qsTr("Fix the card content to preview and export."); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+                    Label { objectName: "cardPrintSummary"; Layout.fillWidth: true; text: root.controller.ready ? qsTr("%1 cards / sheet · %2 copies · %3 sheets · %4 pages").arg(root.controller.plan.slots_per_page).arg(root.controller.plan.total_copies).arg(root.controller.plan.sheet_count).arg(root.controller.plan.page_count) : qsTr("Fix the card content to preview and export."); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
                     ShapeIconButton { objectName: "cardPrintPrevious"; source: "../../icons/back.svg"; toolTipText: qsTr("Previous page"); enabled: root.controller.ready && root.controller.pageIndex > 0; onClicked: root.controller.showPage(root.controller.pageIndex - 1) }
                     Label { text: root.controller.ready ? (root.controller.pageIndex + 1) + " / " + root.controller.plan.page_count : "—"; color: Theme.text; font.pixelSize: 11 }
                     ShapeIconButton { objectName: "cardPrintNext"; source: "../../icons/back.svg"; iconRotation: 180; toolTipText: qsTr("Next page"); enabled: root.controller.ready && root.controller.pageIndex + 1 < (root.controller.plan.page_count || 0); onClicked: root.controller.showPage(root.controller.pageIndex + 1) }

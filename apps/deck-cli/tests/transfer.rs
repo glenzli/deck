@@ -125,6 +125,54 @@ fn legacy_transfer_preserves_absent_layout_and_incomplete_work_without_acceptanc
 }
 
 #[test]
+fn shared_back_only_artwork_is_remapped_and_discovered_as_an_image() {
+    let fixture = Fixture::new();
+    let mut value = manifest(&fixture, false);
+    let foreign_artwork = value["composition"]["cards"][0]["artwork"].clone();
+    value["composition"]["cards"][0]["artwork"] = Value::Null;
+    value["composition"]["back"] = json!({
+        "mode":"image", "artwork":foreign_artwork,
+        "image_fit":"cover", "background_color":"#F2F2F2"
+    });
+    let source_database = fs::read(fixture.root.join("source.shape/project.sqlite")).unwrap();
+    let imported = import(&fixture, &fixture.project, &value, true);
+    let back = &imported["draft"]["composition"]["back"];
+    assert_eq!(back["mode"], "image");
+    assert_eq!(back["image_fit"], "cover");
+    assert_eq!(back["background_color"], "#F2F2F2");
+    assert_ne!(back["artwork"], foreign_artwork);
+    assert_eq!(back["artwork"], imported["mappings"][0]["local_source"]);
+    assert_eq!(
+        imported["mappings"][0]["source_content"],
+        imported["mappings"][0]["local_content"]
+    );
+    assert!(imported["draft"]["composition"]["cards"][0]["artwork"].is_null());
+    assert_eq!(imported["accepted_kit"], false);
+    let status = fixture.run("status", None, true);
+    let draft = &status["kits"][0]["draft"];
+    let input = draft["inputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|input| input["source"] == back["artwork"])
+        .unwrap();
+    assert_eq!(input["status"], "current");
+    assert_eq!(input["kind_status"], "compatible");
+    assert_eq!(input["expected_kind"], "image_raster");
+    assert!(
+        !draft["blockers"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("input_role_ambiguous"))
+    );
+    assert_eq!(
+        fs::read(fixture.root.join("source.shape/project.sqlite")).unwrap(),
+        source_database
+    );
+    no_stage(&fixture);
+}
+
+#[test]
 fn invalid_paths_digests_contracts_and_material_sets_never_publish_a_partial_project() {
     let fixture = Fixture::new();
     let value = manifest(&fixture, false);

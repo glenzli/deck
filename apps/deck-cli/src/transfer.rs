@@ -72,11 +72,7 @@ impl Manifest {
         let mut total = 0_u64;
         let mut paths = BTreeSet::new();
         for material in &self.materials {
-            let is_image = self
-                .composition
-                .cards
-                .iter()
-                .any(|c| c.artwork == Some(material.source));
+            let is_image = self.composition.uses_artwork(material.source);
             let is_text = self
                 .composition
                 .cards
@@ -226,6 +222,9 @@ fn populate(stage: &Path, manifest: &Manifest, path: &Path, digest: &str) -> Res
             if card.text_material == Some(material.source) {
                 card.text_material = Some(local);
             }
+        }
+        if let Some(back) = &mut composition.back {
+            back.replace_artwork(material.source, local);
         }
         mappings.push(json!({"source":material.source,"source_content":material.content,"source_contract":material.contract,
             "local_source":local,"local_content":revision.content,"local_contract":revision.content_contract}));

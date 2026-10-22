@@ -7,10 +7,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{OperatorConfigurationSchemaId, WorkingInput, WorkingOperatorConfiguration};
 
+mod back;
 mod layout;
+pub use back::CardKitBack;
 pub use layout::{
-    CardImageFit, CardImagePosition, CardLayoutConfig, CardLayoutMode, CardTextAlign,
-    CardTextVerticalAlign,
+    CardBlock, CardBlockField, CardBlockVerticalAlign, CardImageFit, CardImagePosition,
+    CardLayoutConfig, CardLayoutMode, CardTextAlign, CardTextVerticalAlign,
 };
 
 pub const CARD_KIT_SCHEMA: &str = "shape.card-kit/1";
@@ -46,6 +48,9 @@ pub struct CardKitRequest {
     /// Absent in historical kits: their original renderer and completeness rules stay intact.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layout: Option<CardLayoutConfig>,
+    /// One optional shared back; absent historical compositions retain their original JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub back: Option<CardKitBack>,
     pub cards: Vec<CardKitCard>,
 }
 
@@ -98,6 +103,9 @@ impl CardKitRequest {
         if let Some(layout) = &self.layout {
             layout.validate()?;
         }
+        if let Some(back) = &self.back {
+            back.validate()?;
+        }
         let mut ids = BTreeSet::new();
         for card in &self.cards {
             if let Some(layout) = &card.layout {
@@ -148,10 +156,16 @@ impl CardKitRequest {
             .iter()
             .flat_map(|c| [c.artwork, c.text_material])
             .flatten()
+            .chain(self.back.as_ref().and_then(CardKitBack::artwork))
         {
             inputs.insert((source.artifact_id, source.revision_id), source);
         }
         inputs.into_values().collect()
+    }
+
+    pub fn uses_artwork(&self, source: WorkingInput) -> bool {
+        self.cards.iter().any(|card| card.artwork == Some(source))
+            || self.back.as_ref().and_then(CardKitBack::artwork) == Some(source)
     }
 
     /// # Errors

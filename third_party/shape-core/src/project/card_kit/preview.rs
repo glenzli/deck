@@ -20,7 +20,7 @@ impl ShapeProject {
         request: &CardKitRequest,
         selected_id: Option<&str>,
     ) -> Result<Value, CardKitError> {
-        let materials = self.card_kit_materials(request, false)?;
+        let materials = self.card_kit_visible_materials(request)?;
         let selected_id = selected_id.unwrap_or(&request.cards[0].id);
         let selected = request
             .cards

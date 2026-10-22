@@ -170,7 +170,7 @@ fn input_versions(
             Some(head) if head == source.revision_id => "current",
             Some(_) => "changed",
         };
-        let artwork = composition.cards.iter().any(|c|c.artwork == Some(source));
+        let artwork = composition.uses_artwork(source);
         let text = composition.cards.iter().any(|c|c.text_material == Some(source));
         let expected_kind = match (artwork,text) {
             (true,false) => Some(ArtifactKind::ImageRaster),

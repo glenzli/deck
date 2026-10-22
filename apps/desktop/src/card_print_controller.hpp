@@ -15,6 +15,8 @@ class CardPrintController : public QObject {
     Q_PROPERTY(QVariantMap plan READ plan NOTIFY documentChanged)
     Q_PROPERTY(QString previewSource READ previewSource NOTIFY previewChanged)
     Q_PROPERTY(int pageIndex READ pageIndex NOTIFY previewChanged)
+    Q_PROPERTY(QString pageSide READ pageSide NOTIFY previewChanged)
+    Q_PROPERTY(int sheetIndex READ sheetIndex NOTIFY previewChanged)
     Q_PROPERTY(int version READ version NOTIFY documentChanged)
     Q_PROPERTY(bool ready READ ready NOTIFY documentChanged)
     Q_PROPERTY(bool running READ running NOTIFY statusChanged)
@@ -33,6 +35,16 @@ class CardPrintController : public QObject {
     }
     int pageIndex() const {
         return page_index_;
+    }
+    QString pageSide() const {
+        return document_ && page_index_ < document_->pages.size()
+                   ? document_->pages[page_index_].side
+                   : QString{};
+    }
+    int sheetIndex() const {
+        return document_ && page_index_ < document_->pages.size()
+                   ? document_->pages[page_index_].sheet_index
+                   : -1;
     }
     int version() const {
         return version_;

@@ -3,9 +3,11 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
+import Shape.Desktop
 
 ColumnLayout {
     id: root
+    required property CardLayoutPresetStore presetStore
     property var configuration: null
     property var resolved: ({})
     property bool perCard: false
@@ -13,14 +15,20 @@ ColumnLayout {
     property bool positionExpanded: false
     property string editIdentity: ""
     property bool editingEnabled: true
+    property bool canUndoBatch: false
     property string colorIdentity: ""
     property string colorConfiguration: ""
     property string colorResolved: ""
     property string validationMessage: ""
     property string colorTarget: "background_color"
-    readonly property var modes: ["auto", "image", "text", "image_text", "classic"]
+    readonly property bool blockMode: value("mode", "auto") === "blocks"
+    readonly property var modes: ["auto", "image", "text", "image_text", "classic"].concat(perCard || blockMode ? ["blocks"] : [])
     readonly property var choices: perCard || !configuration ? [""].concat(modes) : modes
     signal edited(var value)
+    signal savePresetRequested()
+    signal batchRequested()
+    signal undoBatchRequested()
+    signal editBlocksRequested()
     spacing: 8
 
     function value(key, fallback) {
@@ -46,6 +54,7 @@ ColumnLayout {
     function chooseMode(index) {
         const mode = choices[index]
         if (!mode && !perCard) return
+        if (mode === "blocks" && perCard) { editBlocksRequested(); return }
         const next = configuration ? JSON.parse(JSON.stringify(configuration)) : ({})
         if (!mode) delete next.mode
         else next.mode = mode
@@ -80,14 +89,20 @@ ColumnLayout {
     CardLayoutPresets {
         Layout.fillWidth: true
         configuration: root.configuration
+        presetStore: root.presetStore
+        savedPresets: root.presetStore.presets
         onChosen: configuration => { root.validationMessage = ""; root.edited(configuration) }
     }
+    ShapeButton { objectName: "cardLayoutSavePreset"; text: qsTr("Save as preset…"); quiet: true; enabled: root.editingEnabled; onClicked: root.savePresetRequested() }
+    ShapeButton { objectName: "cardLayoutApplyToCards"; text: qsTr("Apply preset to cards…"); quiet: true; enabled: root.editingEnabled; onClicked: root.batchRequested() }
+    ShapeButton { objectName: "cardLayoutUndoBatch"; text: qsTr("Undo last batch layout"); quiet: true; visible: root.canUndoBatch; enabled: root.editingEnabled; onClicked: root.undoBatchRequested() }
+    ShapeButton { objectName: "cardLayoutEditBlocks"; text: qsTr("Edit blocks…"); iconSource: "../../icons/layout.svg"; quiet: true; visible: root.perCard; enabled: root.editingEnabled; onClicked: root.editBlocksRequested() }
     Label { text: root.perCard ? qsTr("This card’s layout") : qsTr("Default layout"); color: Theme.text; font.weight: Font.DemiBold }
     ShapeComboBox {
         objectName: root.perCard ? "cardLayoutOverride" : "cardLayoutDefault"
         Layout.fillWidth: true
         model: {
-            const names = [qsTr("Automatic"), qsTr("Complete image"), qsTr("Text only"), qsTr("Image and text"), qsTr("Game card")]
+            const names = [qsTr("Automatic"), qsTr("Complete image"), qsTr("Text only"), qsTr("Image and text"), qsTr("Game card")].concat(root.perCard || root.blockMode ? [qsTr("Blocks")] : [])
             return root.perCard || !root.configuration
                 ? [root.perCard ? qsTr("Use the set’s layout type") : qsTr("Original game-card layout")].concat(names) : names
         }
@@ -100,77 +115,81 @@ ColumnLayout {
         text: qsTr("These saved cards keep their original appearance. Choose another layout to use the flexible card settings.")
         color: Theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12
     }
-    Label { text: qsTr("Image placement"); color: Theme.muted }
-    ShapeComboBox {
-        objectName: root.perCard ? "cardImageFitOverride" : "cardImageFitDefault"
-        Layout.fillWidth: true
-        model: [qsTr("Show the complete image"), qsTr("Fill the card · crop edges")]
-        selectedIndex: root.value("image_fit", "contain") === "cover" ? 1 : 0
-        onActivated: index => root.setValue("image_fit", index === 1 ? "cover" : "contain")
-    }
-    Label {
-        Layout.fillWidth: true
-        visible: root.value("image_fit", "contain") === "cover"
-        text: qsTr("Edges outside the image area will be cropped. Check the preview before printing.")
-        color: Theme.warning; wrapMode: Text.WordWrap; font.pixelSize: 12
-    }
+    Label { Layout.fillWidth: true; visible: root.blockMode; text: qsTr("Edit blocks on an individual card."); color: Theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 11 }
     ColumnLayout {
-        visible: ["auto", "image_text", "classic"].indexOf(root.value("mode", "auto")) >= 0
-        Layout.fillWidth: true; spacing: 6
-        Label { text: qsTr("Picture position"); color: Theme.muted; font.pixelSize: 11 }
+        visible: !root.blockMode; Layout.fillWidth: true; spacing: 8
+        Label { text: qsTr("Image placement"); color: Theme.muted }
         ShapeComboBox {
-            objectName: root.perCard ? "cardImagePositionOverride" : "cardImagePositionDefault"
+            objectName: root.perCard ? "cardImageFitOverride" : "cardImageFitDefault"
             Layout.fillWidth: true
-            model: [qsTr("Automatic"), qsTr("Picture above text"), qsTr("Picture below text"), qsTr("Picture on the left"), qsTr("Picture on the right"), qsTr("Photo with caption panel")]
-            selectedIndex: Math.max(0, ["auto","top","bottom","left","right","background"].indexOf(root.value("image_position", "auto")))
-            onActivated: index => root.setValue("image_position", ["auto","top","bottom","left","right","background"][index])
+            model: [qsTr("Show the complete image"), qsTr("Fill the card · crop edges")]
+            selectedIndex: root.value("image_fit", "contain") === "cover" ? 1 : 0
+            onActivated: index => root.setValue("image_fit", index === 1 ? "cover" : "contain")
+        }
+        Label {
+            Layout.fillWidth: true
+            visible: root.value("image_fit", "contain") === "cover"
+            text: qsTr("Edges outside the image area will be cropped. Check the preview before printing.")
+            color: Theme.warning; wrapMode: Text.WordWrap; font.pixelSize: 12
+        }
+        ColumnLayout {
+            visible: ["auto", "image_text", "classic"].indexOf(root.value("mode", "auto")) >= 0
+            Layout.fillWidth: true; spacing: 6
+            Label { text: qsTr("Picture position"); color: Theme.muted; font.pixelSize: 11 }
+            ShapeComboBox {
+                objectName: root.perCard ? "cardImagePositionOverride" : "cardImagePositionDefault"
+                Layout.fillWidth: true
+                model: [qsTr("Automatic"), qsTr("Picture above text"), qsTr("Picture below text"), qsTr("Picture on the left"), qsTr("Picture on the right"), qsTr("Photo with caption panel")]
+                selectedIndex: Math.max(0, ["auto","top","bottom","left","right","background"].indexOf(root.value("image_position", "auto")))
+                onActivated: index => root.setValue("image_position", ["auto","top","bottom","left","right","background"][index])
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Label { Layout.fillWidth: true; text: qsTr("Picture share (%)"); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+                ShapeSpinBox { objectName: root.perCard ? "cardImageShareOverride" : "cardImageShareDefault"; from: 20; to: 80; stepSize: 5; value: root.value("image_share_percent", 50); onValueModified: root.setValue("image_share_percent", value) }
+            }
         }
         RowLayout {
             Layout.fillWidth: true
-            Label { Layout.fillWidth: true; text: qsTr("Picture share (%)"); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
-            ShapeSpinBox { objectName: root.perCard ? "cardImageShareOverride" : "cardImageShareDefault"; from: 20; to: 80; stepSize: 5; value: root.value("image_share_percent", 50); onValueModified: root.setValue("image_share_percent", value) }
+            Label { Layout.fillWidth: true; text: qsTr("Text size (%)"); color: Theme.muted }
+            ShapeSpinBox {
+                objectName: root.perCard ? "cardTextSizeOverride" : "cardTextSizeDefault"
+                from: 50; to: 300; stepSize: 10; editable: true; value: root.value("text_scale_percent", 100)
+                onValueModified: root.setValue("text_scale_percent", value)
+            }
+        }
+        ShapeButton { objectName: "cardTextPositionToggle"; quiet: true; text: qsTr("Text position…"); selected: root.positionExpanded; onClicked: root.positionExpanded = !root.positionExpanded }
+        ColumnLayout {
+            visible: root.positionExpanded; Layout.fillWidth: true; spacing: 7
+            Label { text: qsTr("Horizontal alignment"); color: Theme.muted; font.pixelSize: 11 }
+            ShapeComboBox {
+                objectName: root.perCard ? "cardTextAlignOverride" : "cardTextAlignDefault"
+                Layout.fillWidth: true; model: [qsTr("Left"), qsTr("Center"), qsTr("Right")]
+                selectedIndex: Math.max(0, ["left", "center", "right"].indexOf(root.value("text_align", "left")))
+                onActivated: index => root.setValue("text_align", ["left", "center", "right"][index])
+            }
+            Label { text: qsTr("Vertical alignment"); color: Theme.muted; font.pixelSize: 11 }
+            ShapeComboBox {
+                objectName: root.perCard ? "cardTextVerticalOverride" : "cardTextVerticalDefault"
+                Layout.fillWidth: true; model: [qsTr("Automatic"), qsTr("Top"), qsTr("Center"), qsTr("Bottom")]
+                selectedIndex: Math.max(0, ["auto","top","center","bottom"].indexOf(root.value("text_vertical_align", "auto")))
+                onActivated: index => root.setValue("text_vertical_align", ["auto","top","center","bottom"][index])
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Label { Layout.fillWidth: true; text: qsTr("Horizontal offset (%)"); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+                ShapeSpinBox { objectName: root.perCard ? "cardTextOffsetXOverride" : "cardTextOffsetXDefault"; from: -30; to: 30; value: root.value("text_offset_x_percent", 0); onValueModified: root.setValue("text_offset_x_percent", value) }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Label { Layout.fillWidth: true; text: qsTr("Vertical offset (%)"); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+                ShapeSpinBox { objectName: root.perCard ? "cardTextOffsetYOverride" : "cardTextOffsetYDefault"; from: -30; to: 30; value: root.value("text_offset_y_percent", 0); onValueModified: root.setValue("text_offset_y_percent", value) }
+            }
+            Label { Layout.fillWidth: true; text: qsTr("Offsets use the card width and height. Keep all text inside the card before printing."); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+            ShapeButton { quiet: true; text: qsTr("Reset text position"); onClicked: root.resetTextPosition() }
         }
     }
-    RowLayout {
-        Layout.fillWidth: true
-        Label { Layout.fillWidth: true; text: qsTr("Text size (%)"); color: Theme.muted }
-        ShapeSpinBox {
-            objectName: root.perCard ? "cardTextSizeOverride" : "cardTextSizeDefault"
-            from: 50; to: 300; stepSize: 10; editable: true; value: root.value("text_scale_percent", 100)
-            onValueModified: root.setValue("text_scale_percent", value)
-        }
-    }
-    ShapeButton { objectName: "cardTextPositionToggle"; quiet: true; text: qsTr("Text position…"); selected: root.positionExpanded; onClicked: root.positionExpanded = !root.positionExpanded }
-    ColumnLayout {
-        visible: root.positionExpanded; Layout.fillWidth: true; spacing: 7
-        Label { text: qsTr("Horizontal alignment"); color: Theme.muted; font.pixelSize: 11 }
-        ShapeComboBox {
-            objectName: root.perCard ? "cardTextAlignOverride" : "cardTextAlignDefault"
-            Layout.fillWidth: true; model: [qsTr("Left"), qsTr("Center"), qsTr("Right")]
-            selectedIndex: Math.max(0, ["left", "center", "right"].indexOf(root.value("text_align", "left")))
-            onActivated: index => root.setValue("text_align", ["left", "center", "right"][index])
-        }
-        Label { text: qsTr("Vertical alignment"); color: Theme.muted; font.pixelSize: 11 }
-        ShapeComboBox {
-            objectName: root.perCard ? "cardTextVerticalOverride" : "cardTextVerticalDefault"
-            Layout.fillWidth: true; model: [qsTr("Automatic"), qsTr("Top"), qsTr("Center"), qsTr("Bottom")]
-            selectedIndex: Math.max(0, ["auto","top","center","bottom"].indexOf(root.value("text_vertical_align", "auto")))
-            onActivated: index => root.setValue("text_vertical_align", ["auto","top","center","bottom"][index])
-        }
-        RowLayout {
-            Layout.fillWidth: true
-            Label { Layout.fillWidth: true; text: qsTr("Horizontal offset (%)"); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
-            ShapeSpinBox { objectName: root.perCard ? "cardTextOffsetXOverride" : "cardTextOffsetXDefault"; from: -30; to: 30; value: root.value("text_offset_x_percent", 0); onValueModified: root.setValue("text_offset_x_percent", value) }
-        }
-        RowLayout {
-            Layout.fillWidth: true
-            Label { Layout.fillWidth: true; text: qsTr("Vertical offset (%)"); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
-            ShapeSpinBox { objectName: root.perCard ? "cardTextOffsetYOverride" : "cardTextOffsetYDefault"; from: -30; to: 30; value: root.value("text_offset_y_percent", 0); onValueModified: root.setValue("text_offset_y_percent", value) }
-        }
-        Label { Layout.fillWidth: true; text: qsTr("Offsets use the card width and height. Keep all text inside the card before printing."); color: Theme.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
-        ShapeButton { quiet: true; text: qsTr("Reset text position"); onClicked: root.resetTextPosition() }
-    }
-    ToolButton { objectName: "cardLayoutAdvanced"; text: (root.expanded ? "⌄  " : "›  ") + qsTr("Colors, border & spacing"); font.pixelSize: 11; onClicked: root.expanded = !root.expanded }
+    ToolButton { objectName: "cardLayoutAdvanced"; text: (root.expanded ? "⌄  " : "›  ") + (root.blockMode ? qsTr("Background & border") : qsTr("Colors, border & spacing")); font.pixelSize: 11; onClicked: root.expanded = !root.expanded }
     ColumnLayout {
         visible: root.expanded
         Layout.fillWidth: true; spacing: 8
@@ -195,8 +214,9 @@ ColumnLayout {
                 }
             }
         }
-        Label { text: qsTr("Text color"); color: Theme.muted; font.pixelSize: 11 }
+        Label { visible: !root.blockMode; text: qsTr("Text color"); color: Theme.muted; font.pixelSize: 11 }
         RowLayout {
+            visible: !root.blockMode
             Layout.fillWidth: true; spacing: 8
             ToolButton {
                 objectName: "cardTextColorSwatch"
@@ -222,6 +242,7 @@ ColumnLayout {
             onToggled: root.setValue("border", checked)
         }
         RowLayout {
+            visible: !root.blockMode
             Layout.fillWidth: true
             Label { Layout.fillWidth: true; text: qsTr("Inner space (%)"); color: Theme.muted; wrapMode: Text.WordWrap }
             ShapeSpinBox {

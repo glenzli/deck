@@ -175,6 +175,30 @@ bool CardPrintController::prepare(
                 QT_TR_NOOP("Choose valid rows, columns and a card from this accepted version."),
                 detail
             );
+        if (detail.contains("card_print.back_required"))
+            return fail(
+                QT_TR_NOOP(
+                    "Add a card back in Whole set settings, then accept this version before "
+                    "printing backs."
+                ),
+                detail
+            );
+        if (detail.contains("card_print.back_incomplete"))
+            return fail(
+                QT_TR_NOOP(
+                    "The card back is incomplete. Choose an accepted image or a solid color in "
+                    "Whole set settings, then accept this version."
+                ),
+                detail
+            );
+        if (detail.contains("card_print.back_offset"))
+            return fail(
+                QT_TR_NOOP(
+                    "Keep each back offset between -10 and 10 mm, with the cards and cut lines "
+                    "on the paper. Reduce the offsets or use smaller cards."
+                ),
+                detail
+            );
         if (detail.contains("card_render.cover_limit:"))
             return fail(
                 QT_TR_NOOP(

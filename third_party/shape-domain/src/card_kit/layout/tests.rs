@@ -60,3 +60,75 @@ fn custom_layout_options_round_trip_override_and_bound_offsets() {
         );
     }
 }
+
+fn block(id: &str) -> serde_json::Value {
+    json!({"id":id,"field":"title","x":0,"y":0,"width":10000,"height":10000,
+        "text_scale_percent":100,"text_align":"left","text_vertical_align":"top", "bold":false,"italic":false,"text_color":"#123456","image_fit":"contain"})
+}
+#[test]
+fn blocks_are_bounded_strict_layers_and_override_as_one_list_without_changing_old_bytes() {
+    let old: CardLayoutConfig =
+        serde_json::from_value(json!({"mode":"text","padding_percent":4})).unwrap();
+    assert_eq!(
+        serde_json::to_value(&old).unwrap(),
+        json!({"mode":"text","padding_percent":4})
+    );
+    let config: CardLayoutConfig =
+        serde_json::from_value(json!({"mode":"blocks","blocks":[block("a"),block("b")]})).unwrap();
+    config.validate().unwrap();
+    let empty: CardLayoutConfig = serde_json::from_value(json!({"blocks":[]})).unwrap();
+    assert_eq!(config.with_overrides(Some(&empty)).blocks, Some(Vec::new()));
+    let switched: CardLayoutConfig = serde_json::from_value(json!({"mode":"image"})).unwrap();
+    assert_eq!(config.with_overrides(Some(&switched)).blocks, config.blocks);
+    assert_eq!(
+        config.with_overrides(Some(&switched)).mode,
+        Some(CardLayoutMode::Image)
+    );
+    for (key, value) in [
+        ("id", json!("../bad")),
+        ("x", json!(10001)),
+        ("width", json!(0)),
+        ("height", json!(10001)),
+        ("text_scale_percent", json!(49)),
+        ("text_color", json!("red")),
+    ] {
+        let mut bad = block("valid");
+        bad[key] = value;
+        assert!(
+            serde_json::from_value::<CardBlock>(bad)
+                .unwrap()
+                .validate()
+                .is_err()
+        );
+    }
+    let mut outside = block("outside");
+    outside["x"] = json!(1);
+    assert!(
+        serde_json::from_value::<CardBlock>(outside)
+            .unwrap()
+            .validate()
+            .is_err()
+    );
+    for (key, value) in [
+        ("field", json!("unknown")),
+        ("text_vertical_align", json!("auto")),
+        ("image_fit", json!("stretch")),
+        ("x", json!(0.5)),
+        ("unexpected", json!(true)),
+    ] {
+        let mut bad = block("valid");
+        bad[key] = value;
+        assert!(serde_json::from_value::<CardBlock>(bad).is_err());
+    }
+    let mut missing = block("a");
+    missing.as_object_mut().unwrap().remove("bold");
+    assert!(serde_json::from_value::<CardBlock>(missing).is_err());
+    let duplicate: CardLayoutConfig =
+        serde_json::from_value(json!({"blocks":[block("a"),block("a")]})).unwrap();
+    assert!(duplicate.validate().is_err());
+    let excessive: CardLayoutConfig = serde_json::from_value(
+        json!({"blocks":(0..17).map(|n|block(&format!("b{n}"))).collect::<Vec<_>>()}),
+    )
+    .unwrap();
+    assert!(excessive.validate().is_err());
+}

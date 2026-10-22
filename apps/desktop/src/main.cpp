@@ -1,6 +1,7 @@
 //! Deck only assembles card, material handoff and print owners; no Shape workbench.
 #include "card_draft_assistant.hpp"
 #include "card_kit_controller.hpp"
+#include "card_layout_preset_store.hpp"
 #include "card_print_controller.hpp"
 #include "deck_cli_client.hpp"
 #include "deck_document_controller.hpp"
@@ -132,6 +133,10 @@ int main(int argc, char* argv[]) {
     if (!hasSavedAppearance)
         preferences.setAppearanceMode(static_cast<int>(UiPreferences::AppearanceMode::Light));
     CardKitController cards(backend, settings, &app);
+    CardLayoutPresetStore layoutPresets(
+        QDir(QFileInfo(settings).absolutePath()).filePath("card-layout-presets.json"),
+        &app
+    );
     CardPrintController print(backend, cli, &app);
     MaterialEditController material(backend, settings, &app);
     DeckDocumentController documents(backend, cli, settings, &app);
@@ -167,6 +172,12 @@ int main(int argc, char* argv[]) {
     QObject::connect(
         &preferences,
         &UiPreferences::languageModeChanged,
+        &layoutPresets,
+        &CardLayoutPresetStore::retranslate
+    );
+    QObject::connect(
+        &preferences,
+        &UiPreferences::languageModeChanged,
         &print,
         &CardPrintController::retranslate
     );
@@ -191,6 +202,7 @@ int main(int argc, char* argv[]) {
     engine.setInitialProperties(
         {{"backend", QVariant::fromValue(&backend)},
          {"cardKit", QVariant::fromValue(&cards)},
+         {"layoutPresets", QVariant::fromValue(&layoutPresets)},
          {"cardPrint", QVariant::fromValue(&print)},
          {"materialEdit", QVariant::fromValue(&material)},
          {"preferences", QVariant::fromValue(&preferences)},

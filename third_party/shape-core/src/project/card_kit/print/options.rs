@@ -41,6 +41,18 @@ impl Default for CardPrintRequestOptions {
 }
 
 impl CardPrintRequestOptions {
+    /// Returns the admitted automatic grid without loading any card material or rendering a face.
+    /// # Errors
+    /// Rejects invalid physical settings and paper fits through the same planner as output jobs.
+    pub fn grid_dimensions(
+        &self,
+        request: &CardKitRequest,
+    ) -> Result<(usize, usize), CardKitError> {
+        let options = self.resolve(request)?;
+        let layout = super::Layout::new(&options, 1)?;
+        Ok((layout.columns, layout.rows))
+    }
+
     /// Fits proportional card faces in a chosen grid, reserving complete cut lines and paper margins.
     /// # Errors
     /// Rejects invalid grids, physical measurements and card faces below the minimum printable size.

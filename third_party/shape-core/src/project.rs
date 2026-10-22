@@ -3,9 +3,9 @@
 mod agent_file;
 mod card_kit;
 pub use card_kit::{
-    CardKitAction, CardKitCandidate, CardKitDraft, CardKitError, CardKitExport,
-    CardPrintCutLineStyle, CardPrintOptions, CardPrintPaper, CardPrintPlan,
-    CardPrintRequestOptions,
+    CARD_BACK_RESOURCE_ID, CardKitAction, CardKitCandidate, CardKitDraft, CardKitError,
+    CardKitExport, CardPrintCutLineStyle, CardPrintFlipEdge, CardPrintOptions, CardPrintPaper,
+    CardPrintPlan, CardPrintRequestOptions, CardPrintSide, CardPrintSides, CardPrintSidesOptions,
 };
 mod material_edit;
 mod picture_book;

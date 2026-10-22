@@ -4,9 +4,10 @@ use std::fmt::Write as _;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::Serialize;
 use shape_domain::{
-    CardImageFit, CardImagePosition, CardKitCard, CardKitRequest, CardLayoutMode, CardTextAlign,
-    CardTextVerticalAlign,
+    CardBlock, CardBlockField, CardImageFit, CardImagePosition, CardKitCard, CardKitRequest,
+    CardLayoutMode, CardTextAlign, CardTextVerticalAlign,
 };
+mod blocks;
 
 use super::{
     CardKitError, Material,
@@ -36,6 +37,8 @@ pub(super) struct ResolvedLayout {
     pub text_vertical_align: CardTextVerticalAlign,
     pub text_offset_x_percent: i8,
     pub text_offset_y_percent: i8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocks: Option<Vec<CardBlock>>,
 }
 
 #[derive(Default, Serialize)]
@@ -65,6 +68,18 @@ pub(super) fn text_fields(card: &CardKitCard, materials: &[Material]) -> Vec<&'s
     .collect()
 }
 
+fn authored_text_fields(card: &CardKitCard, materials: &[Material]) -> Vec<&'static str> {
+    let mut fields = text_fields(card, materials);
+    if card.text_material.is_some() && !fields.contains(&"text_material") {
+        let position = fields
+            .iter()
+            .position(|field| matches!(*field, "stats" | "flavor"))
+            .unwrap_or(fields.len());
+        fields.insert(position, "text_material");
+    }
+    fields
+}
+
 pub(super) fn resolve(
     request: &CardKitRequest,
     card: &CardKitCard,
@@ -89,6 +104,7 @@ pub(super) fn resolve(
             text_vertical_align: CardTextVerticalAlign::Auto,
             text_offset_x_percent: 0,
             text_offset_y_percent: 0,
+            blocks: None,
         };
     };
     let config = root.with_overrides(use_card_override.then_some(card.layout.as_ref()).flatten());
@@ -135,6 +151,9 @@ pub(super) fn resolve(
             .unwrap_or(CardTextVerticalAlign::Auto),
         text_offset_x_percent: config.text_offset_x_percent.unwrap_or(0),
         text_offset_y_percent: config.text_offset_y_percent.unwrap_or(0),
+        blocks: config
+            .blocks
+            .or_else(|| (mode == CardLayoutMode::Blocks).then(Vec::new)),
     }
 }
 
@@ -143,10 +162,14 @@ pub(super) fn hidden(
     card: &CardKitCard,
     materials: &[Material],
 ) -> HiddenContent {
+    if resolved.mode == CardLayoutMode::Blocks {
+        return blocks::hidden(resolved, card, materials);
+    }
+    let fields = authored_text_fields(card, materials);
     HiddenContent {
         artwork: resolved.mode == CardLayoutMode::Text && card.artwork.is_some(),
         text_fields: if resolved.mode == CardLayoutMode::Image {
-            text_fields(card, materials)
+            fields
         } else {
             Vec::new()
         },
@@ -158,6 +181,9 @@ pub(super) fn missing(
     card: &CardKitCard,
     materials: &[Material],
 ) -> Vec<&'static str> {
+    if resolved.mode == CardLayoutMode::Blocks {
+        return blocks::missing(resolved, card, materials);
+    }
     let has_text = !text_fields(card, materials).is_empty();
     if resolved.legacy {
         let mut issues = Vec::new();
@@ -203,7 +229,31 @@ pub(super) fn missing(
 /// Whether this face embeds artwork. Authoring pins hidden by a mode remain in its document.
 pub(super) fn shows_artwork(request: &CardKitRequest, card: &CardKitCard) -> bool {
     request.layout.as_ref().is_none_or(|root| {
-        root.with_overrides(card.layout.as_ref()).mode != Some(CardLayoutMode::Text)
+        let config = root.with_overrides(card.layout.as_ref());
+        match config.mode {
+            Some(CardLayoutMode::Text) => false,
+            Some(CardLayoutMode::Blocks) => config.blocks.as_ref().is_some_and(|blocks| {
+                blocks
+                    .iter()
+                    .any(|block| block.field == CardBlockField::Artwork)
+            }),
+            _ => true,
+        }
+    })
+}
+
+pub(super) fn shows_rules_material(request: &CardKitRequest, card: &CardKitCard) -> bool {
+    request.layout.as_ref().is_none_or(|root| {
+        let config = root.with_overrides(card.layout.as_ref());
+        match config.mode {
+            Some(CardLayoutMode::Image) => false,
+            Some(CardLayoutMode::Blocks) => config.blocks.as_ref().is_some_and(|blocks| {
+                blocks
+                    .iter()
+                    .any(|block| block.field == CardBlockField::Rules)
+            }),
+            _ => true,
+        }
     })
 }
 
@@ -230,6 +280,7 @@ struct FacePlan {
     text_height: f64,
     overflow: bool,
     crop_limited: bool,
+    layered: Option<blocks::BlockPlan>,
 }
 
 pub(super) fn overflow(
@@ -250,6 +301,28 @@ fn plan(
     let width = f64::from(request.canvas_width);
     let height = f64::from(request.canvas_height);
     let short = width.min(height);
+    if resolved.mode == CardLayoutMode::Blocks {
+        let physical_scale = physical_scale.unwrap_or_else(|| {
+            let defaults = super::print::default_options(request);
+            (defaults.card_width_mm / width).min(defaults.card_height_mm / height)
+        });
+        let layered = blocks::plan(&resolved, card, materials, physical_scale);
+        return FacePlan {
+            resolved,
+            image: None,
+            text: Rect {
+                x: 0.0,
+                y: 0.0,
+                width,
+                height,
+            },
+            blocks: Vec::new(),
+            text_height: 0.0,
+            overflow: layered.overflow,
+            crop_limited: layered.crop_limited,
+            layered: Some(layered),
+        };
+    }
     let has_text =
         !text_fields(card, materials).is_empty() && resolved.mode != CardLayoutMode::Image;
     let (image, text) = content_regions(&resolved, card, materials);
@@ -298,8 +371,7 @@ fn plan(
         if !has_text || value.trim().is_empty() {
             continue;
         }
-        let font =
-            (short * proportion * scale).max((points * 25.4 / (72.0 * physical_scale)).ceil());
+        let font = readable_font(short, proportion, scale, points, physical_scale);
         let wrapped = wrap_flex_to_width(value, font, text.width);
         overflow |= wrapped.overflow;
         blocks.push(TextBlock {
@@ -326,6 +398,7 @@ fn plan(
         blocks,
         text_height,
         overflow,
+        layered: None,
     };
     if plan.resolved.text_offset_x_percent != 0
         || plan.resolved.text_offset_y_percent != 0
@@ -346,6 +419,10 @@ fn plan(
         }
     }
     plan
+}
+
+fn readable_font(short: f64, proportion: f64, scale: f64, points: f64, physical_scale: f64) -> f64 {
+    (short * proportion * scale).max((points * 25.4 / (72.0 * physical_scale)).ceil())
 }
 
 fn content_regions(
@@ -491,32 +568,40 @@ pub(super) fn render(
     let height = resolved.canvas_height;
     let mut svg = format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{width}" height="{height}" viewBox="0 0 {width} {height}"><desc>{}</desc><rect width="{width}" height="{height}" fill="{}"/>"#,
-        escape(&format!(
-            "{}\n{}\n{}\n{}\n{}\n{}",
-            card.title,
-            card.card_type,
-            card.cost,
-            rules(card, materials),
-            card.stats,
-            card.flavor
-        )),
+        escape(&if plan.layered.is_some() {
+            card.id.clone()
+        } else {
+            format!(
+                "{}\n{}\n{}\n{}\n{}\n{}",
+                card.title,
+                card.card_type,
+                card.cost,
+                rules(card, materials),
+                card.stats,
+                card.flavor
+            )
+        }),
         resolved.background_color
     );
-    if !plan.crop_limited
-        && let (Some(area), Some(material)) = (
-            plan.image,
-            card.artwork
-                .and_then(|pin| materials.iter().find(|m| m.source == pin)),
-        )
-    {
-        render_image(&mut svg, area, material, resolved.image_fit);
-    } else if physical_scale.is_none()
-        && !plan.crop_limited
-        && let Some(area) = plan.image
-    {
-        render_placeholder(&mut svg, area);
+    if let Some(layered) = &plan.layered {
+        blocks::paint(&mut svg, layered, card, materials, physical_scale.is_none());
+    } else {
+        if !plan.crop_limited
+            && let (Some(area), Some(material)) = (
+                plan.image,
+                card.artwork
+                    .and_then(|pin| materials.iter().find(|m| m.source == pin)),
+            )
+        {
+            render_image(&mut svg, area, material, resolved.image_fit);
+        } else if physical_scale.is_none()
+            && !plan.crop_limited
+            && let Some(area) = plan.image
+        {
+            render_placeholder(&mut svg, area);
+        }
+        render_text(&mut svg, &plan);
     }
-    render_text(&mut svg, &plan);
     if resolved.border {
         let stroke = f64::from(width.min(height)) / 250.0;
         write!(svg, r#"<rect x="{:.3}" y="{:.3}" width="{:.3}" height="{:.3}" fill="none" stroke="{}" stroke-width="{stroke:.3}"/>"#, stroke/2.0, stroke/2.0, f64::from(width)-stroke, f64::from(height)-stroke, resolved.text_color).expect("String writes are infallible");
@@ -529,13 +614,27 @@ pub(super) fn render(
 }
 
 fn render_placeholder(svg: &mut String, area: Rect) {
+    render_placeholder_named(svg, area, "image-placeholder");
+}
+fn render_placeholder_named(svg: &mut String, area: Rect, id: &str) {
     let icon = (area.width.min(area.height) * 0.22).clamp(24.0, 72.0);
     let x = area.x + (area.width - icon) / 2.0;
     let y = area.y + (area.height - icon) / 2.0;
-    write!(svg, r##"<g id="image-placeholder"><rect x="{:.3}" y="{:.3}" width="{:.3}" height="{:.3}" rx="3" fill="#f0f0f0" stroke="#b5b5b5" stroke-width="2" stroke-dasharray="7 5"/><g transform="translate({x:.3} {y:.3}) scale({:.5})" fill="none" stroke="#929292" stroke-width="1.4" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><circle cx="8" cy="8" r="2"/><path d="M3 19 10 12 14 16 17 12 22 17"/></g></g>"##, area.x, area.y, area.width, area.height, icon/24.0).expect("String writes are infallible");
+    write!(svg, r##"<g id="{id}"><rect x="{:.3}" y="{:.3}" width="{:.3}" height="{:.3}" rx="3" fill="#f0f0f0" stroke="#b5b5b5" stroke-width="2" stroke-dasharray="7 5"/><g transform="translate({x:.3} {y:.3}) scale({:.5})" fill="none" stroke="#929292" stroke-width="1.4" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><circle cx="8" cy="8" r="2"/><path d="M3 19 10 12 14 16 17 12 22 17"/></g></g>"##, area.x, area.y, area.width, area.height, icon/24.0).expect("String writes are infallible");
 }
 
 fn render_image(svg: &mut String, area: Rect, material: &Material, fit: CardImageFit) {
+    render_image_primitive(svg, area, material, fit, "art", None);
+}
+
+fn render_image_primitive(
+    svg: &mut String,
+    area: Rect,
+    material: &Material,
+    fit: CardImageFit,
+    namespace: &str,
+    shared_source: Option<&str>,
+) {
     let dimensions = material
         .image_dimensions
         .expect("validated raster dimensions");
@@ -545,6 +644,18 @@ fn render_image(svg: &mut String, area: Rect, material: &Material, fit: CardImag
         width,
         height,
     } = fitted_image(area, dimensions, fit);
+    if let Some(source) = shared_source {
+        let scale_x = width / f64::from(dimensions.0);
+        let scale_y = height / f64::from(dimensions.1);
+        if fit == CardImageFit::Cover {
+            let local_x = (area.width - width) / 2.0;
+            let local_y = (area.height - height) / 2.0;
+            write!(svg,r##"<defs><symbol id="{namespace}-viewport" x="0" y="0" width="{:.3}" height="{:.3}" viewBox="0 0 {:.3} {:.3}" overflow="hidden"><use xlink:href="#{source}" transform="translate({local_x:.3} {local_y:.3}) scale({scale_x:.9} {scale_y:.9})"/></symbol></defs><use x="{:.3}" y="{:.3}" width="{:.3}" height="{:.3}" xlink:href="#{namespace}-viewport"/>"##,area.width,area.height,area.width,area.height,area.x,area.y,area.width,area.height).expect("String writes are infallible");
+        } else {
+            write!(svg,r##"<defs><clipPath id="{namespace}"><rect x="{:.3}" y="{:.3}" width="{:.3}" height="{:.3}"/></clipPath></defs><g clip-path="url(#{namespace})"><use xlink:href="#{source}" transform="translate({x:.3} {y:.3}) scale({scale_x:.9} {scale_y:.9})"/></g>"##,area.x,area.y,area.width,area.height).expect("String writes are infallible");
+        }
+        return;
+    }
     if fit == CardImageFit::Cover {
         // Qt clips a symbol's viewport with QPainter before drawing its single image child.
         // A mask instead allocates buffers for the entire expanded image before clipping.

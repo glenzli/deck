@@ -14,10 +14,14 @@ struct Slot {
     QString card_id;
     int copy_index = 0;
     QRectF rect_mm, content_rect_mm;
+    QString resource_id;
+    QString face = QStringLiteral("front");
 };
 struct Page {
     QVector<Slot> placements;
     QVector<QLineF> crop_marks;
+    QString side = QStringLiteral("front");
+    int sheet_index = 0;
 };
 struct Document {
     QString name;
@@ -25,7 +29,7 @@ struct Document {
     QSizeF sheet_mm;
     double stroke_mm = 0;
     bool dashed_cut_grid = false;
-    // Unique card resources are shared by every placement; no payload is expanded per copy.
+    // Front resources and one shared back are never expanded per physical copy.
     QHash<QString, QByteArray> cards;
     QVector<Page> pages;
 };

@@ -72,6 +72,306 @@ impl Drop for Fixture {
     }
 }
 
+fn bound_block(id: &str, field: &str, x: u16, y: u16, width: u16, height: u16) -> Value {
+    json!({"id":id,"field":field,"x":x,"y":y,"width":width,"height":height,
+        "text_scale_percent":100,"text_align":"left","text_vertical_align":"top",
+        "bold":false,"italic":false,"text_color":"#123456","image_fit":"contain"})
+}
+fn block_composition(card: Value, blocks: Value) -> CardKitRequest {
+    let mut request = Fixture::composition(card);
+    request.layout=Some(serde_json::from_value(json!({"mode":"blocks","blocks":blocks,"background_color":"#fefefe","padding_percent":20})).unwrap());
+    request
+}
+
+#[test]
+fn blocks_bind_only_selected_fields_report_hidden_content_and_resolve_whole_list() {
+    let f = Fixture::new();
+    let request = block_composition(
+        json!({"id":"stable","title":"Visible","rules":"Hidden body","artwork":f.image}),
+        json!([bound_block("title", "title", 500, 500, 9000, 2000)]),
+    );
+    let preview = f.project.preview_card_kit(&request, None).unwrap();
+    assert_eq!(preview["ready_to_export"], true);
+    assert_eq!(preview["cards"][0]["hidden_content"]["artwork"], true);
+    assert_eq!(
+        preview["cards"][0]["hidden_content"]["text_fields"],
+        json!(["rules"])
+    );
+    let svg = preview["svg"].as_str().unwrap();
+    assert!(svg.contains(">Visible</text>"));
+    assert!(!svg.contains("Hidden body"));
+    assert!(!svg.contains("data:image/png"));
+    assert!(
+        svg.contains("x=\"60.000\" y=\"40.000\" width=\"1080.000\" height=\"160.000\""),
+        "block coordinates ignore global padding and use the complete canvas"
+    );
+    let empty = block_composition(json!({"id":"empty","title":"Not bound"}), json!([]));
+    let preview = f.project.preview_card_kit(&empty, None).unwrap();
+    assert_eq!(preview["ready_to_export"], false);
+    assert_eq!(preview["cards"][0]["issues"], json!(["empty_content"]));
+    assert_eq!(preview["cards"][0]["resolved_layout"]["blocks"], json!([]));
+    let old = Fixture::composition(json!({"id":"old","title":"Old"}));
+    assert!(
+        f.project.preview_card_kit(&old, None).unwrap()["cards"][0]["resolved_layout"]
+            .get("blocks")
+            .is_none()
+    );
+    let mut switched = request.clone();
+    switched.layout.as_mut().unwrap().mode = Some(CardLayoutMode::Text);
+    assert_eq!(f.project.preview_card_kit(&switched,None).unwrap()["cards"][0]["resolved_layout"]["blocks"].as_array().unwrap().len(),1);
+}
+
+#[test]
+fn overlapping_blocks_keep_layer_order_share_one_image_and_use_distinct_viewports() {
+    let f = Fixture::new();
+    let mut cover = bound_block("a", "artwork", 1000, 1000, 6000, 7000);
+    cover["image_fit"] = json!("cover");
+    let request = block_composition(
+        json!({"id":"layers","title":"Top title","artwork":f.image}),
+        json!([
+            bound_block("art-source", "artwork", 0, 0, 10000, 10000),
+            cover,
+            bound_block("a-bounds", "title", 1000, 1000, 8000, 2500)
+        ]),
+    );
+    let preview = f.project.preview_card_kit(&request, None).unwrap();
+    assert_eq!(preview["ready_to_export"], true);
+    let svg = preview["svg"].as_str().unwrap();
+    assert_eq!(
+        svg.matches("data:image/png;base64,").count(),
+        1,
+        "image payload is shared by repeated field bindings"
+    );
+    assert!(
+        svg.find("data-block-id=\"art-source\"").unwrap()
+            < svg.find("data-block-id=\"a\"").unwrap()
+    );
+    assert!(
+        svg.find("data-block-id=\"a\"").unwrap() < svg.find("data-block-id=\"a-bounds\"").unwrap()
+    );
+    assert!(svg.contains("id=\"card-block-art-0\""));
+    assert!(svg.contains("id=\"card-block-art-1-viewport\""));
+    assert_eq!(
+        svg.matches("xlink:href=\"#card-block-image-source\"")
+            .count(),
+        2
+    );
+    let ids = svg
+        .split(" id=\"")
+        .skip(1)
+        .map(|tail| tail.split('"').next().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        ids.iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        ids.len(),
+        "legal authored ids cannot collide with SVG internal ids"
+    );
+    let missing = block_composition(
+        json!({"id":"missing","title":"Title"}),
+        json!([bound_block("art", "artwork", 0, 0, 10000, 10000)]),
+    );
+    let preview = f.project.preview_card_kit(&missing, None).unwrap();
+    assert!(
+        preview["cards"][0]["issues"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("missing_artwork"))
+    );
+    assert!(
+        preview["svg"]
+            .as_str()
+            .unwrap()
+            .contains("card-block-placeholder-0")
+    );
+}
+
+#[test]
+fn block_text_reuses_bound_material_wrapping_styles_and_readable_overflow_limits() {
+    let mut f = Fixture::new();
+    let text = f
+        .project
+        .create_text_document("Bound rules", "Spring 春。\nSecond line")
+        .unwrap();
+    let pin = WorkingInput {
+        artifact_id: text.artifact_id,
+        revision_id: text.id,
+    };
+    let mut block = bound_block("body", "rules", 1000, 1000, 8000, 8000);
+    block["bold"] = json!(true);
+    block["italic"] = json!(true);
+    block["text_align"] = json!("right");
+    block["text_vertical_align"] = json!("bottom");
+    let request = block_composition(json!({"id":"bound","text_material":pin}), json!([block]));
+    let materials = f.project.card_kit_visible_materials(&request).unwrap();
+    let rendered = render(&request, &request.cards[0], &materials, Some(63.0 / 1200.0)).unwrap();
+    assert!(rendered.svg.contains("font-weight=\"bold\""));
+    assert!(rendered.svg.contains("font-style=\"italic\""));
+    assert!(rendered.svg.contains("text-anchor=\"end\""));
+    assert!(rendered.svg.contains(">Spring 春。</text>"));
+    assert!(rendered.svg.contains(">Second line</text>"));
+    let mut tiny = bound_block("tiny", "rules", 1000, 1000, 1000, 100);
+    tiny["text_scale_percent"] = json!(50);
+    let overflow = block_composition(
+        json!({"id":"overflow","rules":"Readable text cannot shrink"}),
+        json!([tiny]),
+    );
+    let preview = f.project.preview_card_kit(&overflow, None).unwrap();
+    assert_eq!(preview["ready_to_export"], false);
+    assert_eq!(preview["cards"][0]["layout_overflow"], true);
+    assert!(
+        render(&overflow, &overflow.cards[0], &[], Some(63.0 / 1200.0))
+            .err()
+            .unwrap()
+            .to_string()
+            .starts_with("card_print.text_overflow:")
+    );
+}
+
+#[test]
+fn text_only_blocks_skip_missing_hidden_artwork_but_acceptance_and_zip_keep_its_pin() {
+    let mut f = Fixture::new();
+    let request = block_composition(
+        json!({"id":"keep-id","title":"Visible","artwork":f.image}),
+        json!([bound_block("text", "title", 1000, 1000, 8000, 3000)]),
+    );
+    let draft = f.project.create_card_kit_draft(&request).unwrap();
+    let candidate = f
+        .project
+        .propose_card_kit(draft.artifact_id, &draft.draft_digest)
+        .unwrap();
+    let accepted = f.project.accept_card_kit(candidate).unwrap();
+    let source = WorkingInput {
+        artifact_id: accepted.artifact_id,
+        revision_id: accepted.id,
+    };
+    let bytes = f.project.read_revision_content(accepted.id).unwrap().bytes;
+    let digest = f
+        .project
+        .revision(f.image.revision_id)
+        .unwrap()
+        .content
+        .digest
+        .to_string();
+    fs::remove_file(
+        f.root
+            .join("faces.shape/objects/b3")
+            .join(&digest[..2])
+            .join(&digest[2..]),
+    )
+    .unwrap();
+    assert!(
+        f.project
+            .read_revision_content(f.image.revision_id)
+            .is_err()
+    );
+    assert_eq!(
+        f.project.preview_card_kit(&request, None).unwrap()["ready_to_export"],
+        true
+    );
+    let print = f
+        .project
+        .plan_card_print_request(source, &CardPrintRequestOptions::default())
+        .unwrap();
+    assert_eq!(print.pages[0].slots[0].card_id, "keep-id");
+    assert!(!print.cards[0].svg.contains("data:image/png"));
+    assert_eq!(
+        f.project.read_card_kit(source).unwrap().cards[0].artwork,
+        Some(f.image)
+    );
+    assert_eq!(
+        f.project.read_revision_content(accepted.id).unwrap().bytes,
+        bytes
+    );
+    let current = f.project.open_card_kit_draft(draft.artifact_id).unwrap();
+    assert!(
+        f.project
+            .propose_card_kit(draft.artifact_id, &current.draft_digest)
+            .is_err()
+    );
+    assert!(
+        f.project
+            .export_card_kit(source, &f.root.join("all-pins.zip"))
+            .is_err()
+    );
+}
+
+#[test]
+fn block_drafts_persist_cover_limits_are_explicit_and_duplex_geometry_stays_shared() {
+    let mut f = Fixture::new();
+    let mut request = block_composition(
+        json!({"id":"same-id","title":"Front","quantity":10}),
+        json!([bound_block("title", "title", 1000, 1000, 8000, 3000)]),
+    );
+    request.back = Some(serde_json::from_value(json!({"mode":"solid","color":"#345678"})).unwrap());
+    let draft = f.project.create_card_kit_draft(&request).unwrap();
+    let candidate = f
+        .project
+        .propose_card_kit(draft.artifact_id, &draft.draft_digest)
+        .unwrap();
+    let accepted = f.project.accept_card_kit(candidate).unwrap();
+    let source = WorkingInput {
+        artifact_id: accepted.artifact_id,
+        revision_id: accepted.id,
+    };
+    let mut dirty = request.clone();
+    dirty.layout.as_mut().unwrap().blocks.as_mut().unwrap()[0].x = 1500;
+    let current = f.project.open_card_kit_draft(draft.artifact_id).unwrap();
+    f.project
+        .save_card_kit_draft(draft.artifact_id, &current.draft_digest, &dirty)
+        .unwrap();
+    let mut other = ShapeProject::open(f.root.join("faces.shape")).unwrap();
+    assert_eq!(
+        other
+            .open_card_kit_draft(draft.artifact_id)
+            .unwrap()
+            .composition,
+        dirty
+    );
+    assert_eq!(other.read_card_kit(source).unwrap(), request);
+    let front = other
+        .plan_card_print_request(source, &CardPrintRequestOptions::default())
+        .unwrap();
+    let duplex = other
+        .plan_card_print_job_request(
+            source,
+            &CardPrintRequestOptions::default(),
+            &[("same-id".into(), 10)],
+            None,
+            &crate::CardPrintSidesOptions {
+                sides: crate::CardPrintSides::Duplex,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(duplex.total_copies, 10);
+    assert_eq!(duplex.total_placements, Some(20));
+    assert_eq!(
+        duplex.pages[1].slots[0].copy_index,
+        front.pages[0].slots[0].copy_index
+    );
+    assert!(
+        (duplex.pages[1].slots[0].rect_mm.x
+            - (210.0 - front.pages[0].slots[0].rect_mm.x - front.pages[0].slots[0].rect_mm.width))
+            .abs()
+            < 1e-6
+    );
+    let stripe = f.stripe(16_384, 1);
+    let mut cover = bound_block("art", "artwork", 0, 0, 10000, 10000);
+    cover["image_fit"] = json!("cover");
+    let extreme = block_composition(json!({"id":"extreme","artwork":stripe}), json!([cover]));
+    let preview = f.project.preview_card_kit(&extreme, None).unwrap();
+    assert_eq!(preview["ready_to_export"], false);
+    assert!(
+        preview["cards"][0]["issues"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("image_crop_limit"))
+    );
+}
+
 #[test]
 fn learning_card_spring_stays_on_one_line_at_double_size_and_excess_copy_is_explicit() {
     let f = Fixture::new();

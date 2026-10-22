@@ -1,6 +1,8 @@
 #include "deck_native_smoke.hpp"
+#include "card_block_workflow_smoke.hpp"
 #include "card_draft_assistant_smoke.hpp"
 #include "card_kit_controller.hpp"
+#include "card_layout_workflow_smoke.hpp"
 #include "card_print_controller.hpp"
 #include "card_print_export.hpp"
 #include "deck_cli_client.hpp"
@@ -1605,6 +1607,22 @@ bool deck_native_smoke::verify(
         }
         preferences.setLanguageMode("en");
         preferences.setAppearanceMode(1);
+        const auto layoutWorkflow = card_layout_workflow_smoke::verify(
+            root,
+            backend,
+            cards,
+            printing,
+            documents,
+            QDir(directory).filePath("layout-workflow")
+        );
+        const auto blockWorkflow = card_block_workflow_smoke::verify(
+            root,
+            backend,
+            cards,
+            printing,
+            documents,
+            QDir(directory).filePath("block-workflow")
+        );
         write(
             QDir(directory).filePath("report.json"),
             {{"status", "passed"},
@@ -1644,6 +1662,8 @@ bool deck_native_smoke::verify(
              {"pdf_filename_collision_suggestion", true},
              {"pdf_open_exact_successful_destination", true},
              {"pdf_missing_or_stale_destination_rejected", true},
+             {"layout_workflow", layoutWorkflow},
+             {"block_workflow", blockWorkflow},
              {"workbench_screenshots", uiEvidence}}
         );
         qInfo().noquote() << "Deck native smoke passed:" << directory;

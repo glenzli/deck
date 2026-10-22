@@ -374,3 +374,221 @@ fn tight_selected_sheets_share_core_geometry_for_margins_and_partial_pages() {
     assert_eq!(before.draft_digest, after.draft_digest);
     assert_eq!(before.expected_head, after.expected_head);
 }
+
+fn back_fixture() -> Fixture {
+    Fixture::with_composition(json!({"name":"Two sides","layout":{"mode":"text"},
+        "cards":[{"id":"a","title":"A","quantity":6},{"id":"b","title":"B","quantity":4},{"id":"c","title":"C","quantity":3}],
+        "back":{"mode":"solid","color":"#123456"}}))
+}
+fn tight_options(margin: f64) -> CardPrintRequestOptions {
+    serde_json::from_value(json!({"cut_line_style":"dashed_grid","gap_mm":0.2,"margin_mm":margin}))
+        .unwrap()
+}
+fn output(fixture: &Fixture, options: CardPrintRequestOptions, imposition: Value) -> Result<Value> {
+    plan(
+        &fixture.project,
+        fixture.source,
+        options,
+        Some(serde_json::from_value(imposition).unwrap()),
+    )
+}
+
+#[test]
+fn duplex_reflects_exact_slots_and_cut_lines_without_reordering_partial_sheets() {
+    let f = back_fixture();
+    let mut back_svgs = Vec::new();
+    for edge in ["long", "short"] {
+        let actual = output(
+            &f,
+            tight_options(5.0),
+            json!({"columns":3,"rows":3,"sides":"duplex","flip_edge":edge}),
+        )
+        .unwrap();
+        assert_eq!(actual["total_copies"], 13);
+        assert_eq!(actual["total_placements"], 26);
+        assert_eq!(actual["sheet_count"], 2);
+        assert_eq!(actual["page_count"], 4);
+        assert_eq!(actual["duplex"], true);
+        let back = actual["cards"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|card| card["id"] == "@deck/back")
+            .collect::<Vec<_>>();
+        assert_eq!(back.len(), 1);
+        back_svgs.push(back[0]["svg"].clone());
+        for sheet in 0..2 {
+            let front = &actual["pages"][sheet * 2];
+            let back = &actual["pages"][sheet * 2 + 1];
+            assert_eq!(front["side"], "front");
+            assert_eq!(back["side"], "back");
+            assert_eq!(front["sheet_index"], sheet);
+            assert_eq!(back["sheet_index"], sheet);
+            let slots = front["slots"].as_array().unwrap();
+            assert_eq!(slots.len(), if sheet == 0 { 9 } else { 4 });
+            for (index, slot) in slots.iter().enumerate() {
+                let reverse = &back["slots"][index];
+                assert_eq!(slot["card_id"], reverse["card_id"]);
+                assert_eq!(slot["copy_index"], reverse["copy_index"]);
+                assert_eq!(slot["face"], "front");
+                assert_eq!(reverse["face"], "back");
+                assert_eq!(reverse["resource_id"], "@deck/back");
+                let a = &slot["rect_mm"];
+                let b = &reverse["rect_mm"];
+                let x = if edge == "long" {
+                    n(&actual, "sheet_width_mm") - n(a, "x") - n(a, "width")
+                } else {
+                    n(a, "x")
+                };
+                let y = if edge == "short" {
+                    n(&actual, "sheet_height_mm") - n(a, "y") - n(a, "height")
+                } else {
+                    n(a, "y")
+                };
+                assert!((n(b, "x") - x).abs() < 1e-6 && (n(b, "y") - y).abs() < 1e-6);
+                assert!(
+                    (n(&reverse["content_rect_mm"], "x")
+                        - n(b, "x")
+                        - (n(&slot["content_rect_mm"], "x") - n(a, "x")))
+                    .abs()
+                        < 1e-6
+                );
+            }
+            for (index, line) in front["crop_marks"].as_array().unwrap().iter().enumerate() {
+                let mirrored = &back["crop_marks"][index];
+                for (axis, size) in [
+                    ("x1", "sheet_width_mm"),
+                    ("x2", "sheet_width_mm"),
+                    ("y1", "sheet_height_mm"),
+                    ("y2", "sheet_height_mm"),
+                ] {
+                    let reflect = if edge == "long" {
+                        axis.starts_with('x')
+                    } else {
+                        axis.starts_with('y')
+                    };
+                    let expected = if reflect {
+                        n(&actual, size) - n(line, axis)
+                    } else {
+                        n(line, axis)
+                    };
+                    assert!((n(mirrored, axis) - expected).abs() < 1e-6);
+                }
+            }
+        }
+    }
+    assert_eq!(
+        back_svgs[0], back_svgs[1],
+        "flip edges never mirror or rotate the shared SVG payload"
+    );
+}
+
+#[test]
+fn duplex_copy_modes_back_only_and_offset_page_bounds_are_real() {
+    let f = back_fixture();
+    for (content, expected) in [
+        (json!({"content":"one_each"}), 3),
+        (json!({"content":"repeat","card_id":"b","copies":13}), 13),
+    ] {
+        let mut imposition = content;
+        imposition["columns"] = json!(3);
+        imposition["rows"] = json!(3);
+        imposition["sides"] = json!("duplex");
+        let actual = output(&f, tight_options(5.0), imposition).unwrap();
+        assert_eq!(actual["total_copies"], expected);
+        assert_eq!(actual["total_placements"], expected * 2);
+    }
+    let backs = output(
+        &f,
+        tight_options(5.0),
+        json!({"columns":3,"rows":3,"sides":"backs"}),
+    )
+    .unwrap();
+    assert_eq!(backs["cards"].as_array().unwrap().len(), 1);
+    assert_eq!(backs["total_placements"], 13);
+    assert_eq!(backs["page_count"], 2);
+    assert_eq!(backs["duplex"], false);
+    let shifted = output(
+        &f,
+        tight_options(5.0),
+        json!({"columns":3,"rows":3,"sides":"duplex","back_offset_x_mm":1,"back_offset_y_mm":-1}),
+    )
+    .unwrap();
+    let front = &shifted["pages"][0]["slots"][0]["rect_mm"];
+    let back = &shifted["pages"][1]["slots"][0]["rect_mm"];
+    assert!((n(back, "x") - (210.0 - n(front, "x") - n(front, "width") + 1.0)).abs() < 1e-6);
+    assert!((n(back, "y") - (n(front, "y") - 1.0)).abs() < 1e-6);
+    assert!(
+        output(
+            &f,
+            tight_options(0.0),
+            json!({"columns":3,"rows":3,"sides":"duplex","back_offset_x_mm":0.1})
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("card_print.back_offset")
+    );
+    for offset in [10.001, -10.001, 0.0001] {
+        assert!(
+            output(
+                &f,
+                tight_options(5.0),
+                json!({"sides":"backs","back_offset_x_mm":offset})
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("card_print.back_offset")
+        );
+    }
+    let maximum=output(&f,tight_options(5.0),json!({"columns":4,"rows":4,"content":"repeat","card_id":"b","copies":4096,"sides":"duplex"})).unwrap();
+    assert_eq!(maximum["sheet_count"], 256);
+    assert_eq!(maximum["page_count"], 512);
+    assert_eq!(maximum["total_placements"], 8192);
+    assert!(output(&f,tight_options(5.0),json!({"columns":1,"rows":1,"content":"repeat","card_id":"b","copies":257,"sides":"duplex"})).unwrap_err().to_string().contains("card_print.page_limit"));
+}
+
+#[test]
+fn back_only_ignores_unprinted_front_readability_and_fronts_ignore_unused_back() {
+    let f = Fixture::with_composition(json!({"name":"Back only","layout":{"mode":"text"},
+        "cards":[{"id":"long","rules":"Long text. ".repeat(700)}],"back":{"mode":"solid","color":"#ffffff"}}));
+    let backs = output(
+        &f,
+        tight_options(5.0),
+        json!({"columns":3,"rows":3,"sides":"backs"}),
+    )
+    .unwrap();
+    assert_eq!(backs["total_copies"], 1);
+    assert_eq!(backs["pages"][0]["slots"][0]["card_id"], "long");
+    assert!(
+        output(
+            &f,
+            tight_options(5.0),
+            json!({"columns":3,"rows":3,"sides":"duplex"})
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("text_overflow")
+    );
+    let incomplete = Fixture::with_composition(
+        json!({"name":"Missing back image","layout":{"mode":"text"},"cards":[{"id":"a","title":"A"}],"back":{"mode":"image","artwork":null}}),
+    );
+    output(
+        &incomplete,
+        tight_options(5.0),
+        json!({"columns":3,"rows":3}),
+    )
+    .unwrap();
+    assert!(
+        output(&incomplete, tight_options(5.0), json!({"sides":"backs"}))
+            .unwrap_err()
+            .to_string()
+            .contains("card_print.back_incomplete")
+    );
+    let absent = Fixture::new();
+    assert!(
+        output(&absent, tight_options(5.0), json!({"sides":"duplex"}))
+            .unwrap_err()
+            .to_string()
+            .contains("card_print.back_required")
+    );
+}

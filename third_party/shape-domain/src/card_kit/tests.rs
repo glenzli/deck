@@ -65,3 +65,49 @@ fn legacy_missing_or_null_layout_is_omitted_and_card_overrides_require_opt_in() 
     parsed.layout = Some(CardLayoutConfig::default());
     parsed.validate().unwrap();
 }
+
+#[test]
+fn optional_shared_back_preserves_legacy_bytes_and_exact_artwork_pins() {
+    let legacy = request();
+    let bytes = serde_json::to_vec(&legacy).unwrap();
+    let mut null = serde_json::to_value(&legacy).unwrap();
+    null["back"] = json!(null);
+    let restored: CardKitRequest = serde_json::from_value(null).unwrap();
+    assert_eq!(serde_json::to_vec(&restored).unwrap(), bytes);
+    let pin = WorkingInput {
+        artifact_id: crate::ArtifactId::new(),
+        revision_id: crate::RevisionId::new(),
+    };
+    let mut with_back = legacy.clone();
+    with_back.back = Some(serde_json::from_value(json!({"mode":"image","artwork":pin})).unwrap());
+    with_back.validate().unwrap();
+    assert_eq!(with_back.inputs(), vec![pin]);
+    assert!(with_back.uses_artwork(pin));
+    with_back.cards[0].artwork = Some(pin);
+    assert_eq!(
+        with_back.inputs(),
+        vec![pin],
+        "a shared pin remains one material input"
+    );
+    with_back.cards[0].artwork = Some(WorkingInput {
+        revision_id: crate::RevisionId::new(),
+        ..pin
+    });
+    assert!(with_back.validate().is_err());
+    let mut draft = legacy;
+    draft.back = Some(serde_json::from_value(json!({"mode":"image","artwork":null})).unwrap());
+    draft.validate().unwrap();
+    assert_eq!(
+        CardKitRequest::from_configuration(&draft.configuration().unwrap()).unwrap(),
+        draft
+    );
+    for back in [
+        json!({"mode":"solid","color":"url(file:/secret)"}),
+        json!({"mode":"solid","color":"#ffffff","artwork":pin}),
+        json!({"mode":"unknown"}),
+        json!({"mode":"image","image_fit":"stretch"}),
+    ] {
+        let parsed = serde_json::from_value::<CardKitBack>(back);
+        assert!(parsed.is_err() || parsed.unwrap().validate().is_err());
+    }
+}

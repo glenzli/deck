@@ -5,7 +5,11 @@ use shape_domain::{ArtifactContentContract, ArtifactRevision, CardKitRequest, Wo
 use std::collections::BTreeMap;
 
 mod options;
+mod sides;
 pub use options::CardPrintRequestOptions;
+pub use sides::{
+    CARD_BACK_RESOURCE_ID, CardPrintFlipEdge, CardPrintSide, CardPrintSides, CardPrintSidesOptions,
+};
 
 use super::{
     CardKitError, ShapeProject,
@@ -19,7 +23,7 @@ const MAX_SLOTS_PER_PAGE: usize = 512;
 const MAX_ARTWORK_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_ARTWORK_PIXELS: u64 = 128 * 1024 * 1024;
 
-fn print_invalid(code: &'static str, message: &'static str) -> CardKitError {
+pub(super) fn print_invalid(code: &'static str, message: &'static str) -> CardKitError {
     CardKitError::PrintSetting { code, message }
 }
 
@@ -126,18 +130,26 @@ pub struct CardPrintLine {
     pub y2: f64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CardPrintSlot {
     pub card_id: String,
     /// One-based copy identity within this card; cards retain their authored ordering.
     pub copy_index: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub face: Option<CardPrintSide>,
     pub rect_mm: CardPrintRect,
     pub content_rect_mm: CardPrintRect,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CardPrintPage {
     pub index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub side: Option<CardPrintSide>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sheet_index: Option<usize>,
     pub slots: Vec<CardPrintSlot>,
     pub crop_marks: Vec<CardPrintLine>,
 }
@@ -164,6 +176,10 @@ pub struct CardPrintPlan {
     pub rows: usize,
     pub slots_per_page: usize,
     pub total_copies: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_placements: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sheet_count: Option<usize>,
     pub page_count: usize,
     pub cards: Vec<CardPrintCard>,
     pub pages: Vec<CardPrintPage>,
@@ -187,7 +203,11 @@ impl CardPrintPlan {
         let mut identities = std::collections::BTreeSet::new();
         for (id, index) in copies {
             if *index == 0
-                || !self.cards.iter().any(|card| card.id == *id)
+                || !self
+                    .pages
+                    .iter()
+                    .flat_map(|page| &page.slots)
+                    .any(|slot| slot.card_id == *id)
                 || !identities.insert((id, index))
             {
                 return Err(print_invalid(
@@ -211,8 +231,9 @@ impl CardPrintPlan {
             template.content_rect_mm.height,
         );
         self.pages = layout.pages(copies, canvas);
-        self.cards
-            .retain(|card| copies.iter().any(|(id, _)| card.id == *id));
+        self.cards.retain(|card| {
+            card.id == CARD_BACK_RESOURCE_ID || copies.iter().any(|(id, _)| card.id == *id)
+        });
         self.columns = layout.columns;
         self.rows = layout.rows;
         self.slots_per_page = layout.capacity;
@@ -233,7 +254,7 @@ impl ShapeProject {
         options: &CardPrintOptions,
     ) -> Result<CardPrintPlan, CardKitError> {
         let request = self.read_card_kit(source)?;
-        self.plan_card_print_composition(source, request, options, None)
+        self.plan_card_print_composition(source, request, options, None, true)
     }
 
     /// Resolves omitted axes proportionally from this accepted face, then admits one print plan.
@@ -246,7 +267,7 @@ impl ShapeProject {
     ) -> Result<CardPrintPlan, CardKitError> {
         let request = self.read_card_kit(source)?;
         let resolved = options.resolve(&request)?;
-        self.plan_card_print_composition(source, request, &resolved, None)
+        self.plan_card_print_composition(source, request, &resolved, None, true)
     }
 
     /// Plans transient copy counts for selected faces of an exact accepted kit.
@@ -279,7 +300,98 @@ impl ShapeProject {
             ));
         }
         let resolved = options.resolve(&request)?;
-        self.plan_card_print_composition(source, request, &resolved, Some(&quantities))
+        self.plan_card_print_composition(source, request, &resolved, Some(&quantities), true)
+    }
+
+    /// Plans an exact selected job, imposes its sheets once, then adds requested shared backs.
+    /// Back-only jobs do not load or render unprinted front content.
+    /// # Errors
+    /// Retains source, copy, material, paper and page bounds and rejects missing backs or unsafe offsets.
+    pub fn plan_card_print_job_request(
+        &self,
+        source: WorkingInput,
+        options: &CardPrintRequestOptions,
+        selection: &[(String, u16)],
+        grid: Option<(usize, usize)>,
+        sides: &CardPrintSidesOptions,
+    ) -> Result<CardPrintPlan, CardKitError> {
+        sides.validate()?;
+        let mut request = self.read_card_kit(source)?;
+        if sides.sides != CardPrintSides::Fronts && request.back.is_none() {
+            return Err(print_invalid(
+                "card_print.back_required",
+                "choose a shared card back before printing backs",
+            ));
+        }
+        let mut quantities = BTreeMap::new();
+        for (id, quantity) in selection {
+            if *quantity == 0 || quantities.insert(id.as_str(), *quantity).is_some() {
+                return Err(print_invalid(
+                    "card_print.selection",
+                    "select unique accepted cards with positive copy counts",
+                ));
+            }
+        }
+        request
+            .cards
+            .retain(|card| quantities.contains_key(card.id.as_str()));
+        if selection.is_empty() || request.cards.len() != selection.len() {
+            return Err(print_invalid(
+                "card_print.selection",
+                "select cards from this accepted version",
+            ));
+        }
+        let resolved = options.resolve(&request)?;
+        let mut plan = self.plan_card_print_composition(
+            source,
+            request.clone(),
+            &resolved,
+            Some(&quantities),
+            sides.sides != CardPrintSides::Backs,
+        )?;
+        let mut copies = Vec::new();
+        for card in &request.cards {
+            for index in 1..=quantities[card.id.as_str()] {
+                copies.push((card.id.clone(), index));
+            }
+        }
+        if let Some((columns, rows)) = grid {
+            plan.impose_grid(columns, rows, &copies)?;
+        }
+        if sides.sides != CardPrintSides::Fronts {
+            let mut budget = ArtworkBudget::default();
+            if sides.sides == CardPrintSides::Duplex {
+                for pin in request
+                    .cards
+                    .iter()
+                    .filter(|card| shows_artwork(&request, card))
+                    .filter_map(|card| card.artwork)
+                {
+                    budget.add(&self.revision(pin.revision_id)?)?;
+                }
+            }
+            if let Some(pin) = request
+                .back
+                .as_ref()
+                .and_then(shape_domain::CardKitBack::artwork)
+            {
+                budget.add(&self.revision(pin.revision_id)?)?;
+            }
+            let slot = &plan.pages[0].slots[0];
+            let canvas = if request.layout.is_none() {
+                750.0
+            } else {
+                f64::from(request.canvas_width)
+            };
+            let svg = self.render_card_back(&request, slot.content_rect_mm.width / canvas)?;
+            plan.cards.push(CardPrintCard {
+                id: CARD_BACK_RESOURCE_ID.into(),
+                title: "Card back".into(),
+                svg,
+            });
+            sides::apply(&mut plan, sides)?;
+        }
+        Ok(plan)
     }
 
     fn plan_card_print_composition(
@@ -288,6 +400,7 @@ impl ShapeProject {
         request: CardKitRequest,
         options: &CardPrintOptions,
         quantities: Option<&BTreeMap<&str, u16>>,
+        render_fronts: bool,
     ) -> Result<CardPrintPlan, CardKitError> {
         let quantity = |id: &str, authored| {
             quantities
@@ -305,24 +418,34 @@ impl ShapeProject {
         for pin in request
             .cards
             .iter()
+            .filter(|_| render_fronts)
             .filter(|c| shows_artwork(&request, c))
             .filter_map(|c| c.artwork)
         {
             artwork_budget.add(&self.revision(pin.revision_id)?)?;
         }
-        let materials = self.card_kit_materials(&request, false)?;
-        ensure_complete(&request, &materials).map_err(|error| match error {
-            error @ CardKitError::ImageCropLimit { .. } => error,
-            _ => print_invalid(
-                "card_print.incomplete",
-                "each card needs visible content required by its layout before printing",
-            ),
-        })?;
+        let mut fronts = request.clone();
+        fronts.back = None;
+        let materials = if render_fronts {
+            self.card_kit_visible_materials(&fronts)?
+        } else {
+            Vec::new()
+        };
+        if render_fronts {
+            ensure_complete(&fronts, &materials).map_err(|error| match error {
+                error @ CardKitError::ImageCropLimit { .. } => error,
+                _ => print_invalid(
+                    "card_print.incomplete",
+                    "each card needs visible content required by its layout before printing",
+                ),
+            })?;
+        }
         let canvas = options::canvas(&request);
         let content_scale = (mm(layout.width) / canvas.0).min(mm(layout.height) / canvas.1);
         let cards = request
             .cards
             .iter()
+            .filter(|_| render_fronts)
             .map(|card| {
                 Ok(CardPrintCard {
                     id: card.id.clone(),
@@ -351,6 +474,8 @@ impl ShapeProject {
             rows: layout.rows,
             slots_per_page: layout.capacity,
             total_copies,
+            total_placements: None,
+            sheet_count: None,
             page_count: layout.page_count,
             cards,
             pages,
@@ -479,6 +604,8 @@ impl Layout {
             .map(|(index, copies)| {
                 let mut page = CardPrintPage {
                     index,
+                    side: None,
+                    sheet_index: None,
                     slots: Vec::with_capacity(copies.len()),
                     crop_marks: Vec::new(),
                 };
@@ -597,6 +724,8 @@ impl Layout {
             CardPrintSlot {
                 card_id: card_id.into(),
                 copy_index,
+                resource_id: None,
+                face: None,
                 rect_mm,
                 content_rect_mm,
             },

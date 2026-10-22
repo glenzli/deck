@@ -1,6 +1,248 @@
 <?xml version='1.0' encoding='utf-8'?>
 <TS version="2.1" language="zh_CN">
     <context>
+        <name>CardBackEditor</name>
+        <message>
+            <source>Choose back image…</source>
+            <translation>选择卡背图片…</translation>
+        </message>
+        <message>
+            <source>Choose card back color</source>
+            <translation>选择卡背颜色</translation>
+        </message>
+        <message>
+            <source>Card back</source>
+            <translation>卡背</translation>
+        </message>
+        <message>
+            <source>One back design is shared by every card in this set.</source>
+            <translation>整套卡片使用同一个卡背。</translation>
+        </message>
+        <message>
+            <source>No card back</source>
+            <translation>无卡背</translation>
+        </message>
+        <message>
+            <source>Solid color</source>
+            <translation>纯色</translation>
+        </message>
+        <message>
+            <source>Image</source>
+            <translation>图片</translation>
+        </message>
+        <message>
+            <source>Use a color such as #ffffff.</source>
+            <translation>请输入颜色值，例如 #ffffff。</translation>
+        </message>
+        <message>
+            <source>Import back image…</source>
+            <translation>导入卡背图片…</translation>
+        </message>
+        <message>
+            <source>Show the complete image</source>
+            <translation>完整显示图片</translation>
+        </message>
+        <message>
+            <source>Fill the card · crop edges</source>
+            <translation>填满卡面 · 裁去边缘</translation>
+        </message>
+        <message>
+            <source>Card back preview</source>
+            <translation>卡背预览</translation>
+        </message>
+        <message>
+            <source>Choose an accepted image before exporting card backs.</source>
+            <translation>导出卡背前，请先选择已采用的图片。</translation>
+        </message>
+    </context>
+    <context>
+        <name>CardBlockEditor</name>
+        <message>
+            <source>Title</source>
+            <translation>标题</translation>
+        </message>
+        <message>
+            <source>Body text</source>
+            <translation>正文</translation>
+        </message>
+        <message>
+            <source>Image</source>
+            <translation>图片</translation>
+        </message>
+        <message>
+            <source>Type</source>
+            <translation>类型</translation>
+        </message>
+        <message>
+            <source>Cost</source>
+            <translation>费用</translation>
+        </message>
+        <message>
+            <source>Stats</source>
+            <translation>数值</translation>
+        </message>
+        <message>
+            <source>Additional text</source>
+            <translation>附加文字</translation>
+        </message>
+        <message>
+            <source>Eight block changes are waiting to be saved. Return to those cards and retry or discard them before editing another card.</source>
+            <translation>已有 8 份区块改动等待保存，请返回这些卡片重试或放弃，再编辑其他卡片。</translation>
+        </message>
+        <message>
+            <source>Could not save this block change. Keep editing here or retry.</source>
+            <translation>未能保存区块改动，可继续编辑或重试。</translation>
+        </message>
+        <message>
+            <source>Could not undo this change. Your current draft was kept.</source>
+            <translation>未能撤销此改动，当前草稿已保留。</translation>
+        </message>
+        <message>
+            <source>Choose text color</source>
+            <translation>选择文字颜色</translation>
+        </message>
+        <message>
+            <source>Blocks</source>
+            <translation>区块</translation>
+        </message>
+        <message>
+            <source>Undo block change</source>
+            <translation>撤销区块改动</translation>
+        </message>
+        <message>
+            <source>Edit card content</source>
+            <translation>编辑卡片内容</translation>
+        </message>
+        <message>
+            <source>Choose another layout</source>
+            <translation>选择其他版式</translation>
+        </message>
+        <message>
+            <source>Drag blocks on the card. Resize from a corner. Edit words and images in Content.</source>
+            <translation>在卡面上拖动区块，拖动四角调整尺寸。文字和图片请在“内容”中编辑。</translation>
+        </message>
+        <message>
+            <source>Add field block</source>
+            <translation>添加字段区块</translation>
+        </message>
+        <message>
+            <source>%1 of 16 blocks</source>
+            <translation>%1 / 16 个区块</translation>
+        </message>
+        <message>
+            <source>Send backward</source>
+            <translation>下移一层</translation>
+        </message>
+        <message>
+            <source>Bring forward</source>
+            <translation>上移一层</translation>
+        </message>
+        <message>
+            <source>Remove block</source>
+            <translation>移除区块</translation>
+        </message>
+        <message>
+            <source>X (%)</source>
+            <translation>水平位置（%）</translation>
+        </message>
+        <message>
+            <source>Y (%)</source>
+            <translation>垂直位置（%）</translation>
+        </message>
+        <message>
+            <source>Width (%)</source>
+            <translation>宽度（%）</translation>
+        </message>
+        <message>
+            <source>Height (%)</source>
+            <translation>高度（%）</translation>
+        </message>
+        <message>
+            <source>Text size (%)</source>
+            <translation>文字大小（%）</translation>
+        </message>
+        <message>
+            <source>Left</source>
+            <translation>左对齐</translation>
+        </message>
+        <message>
+            <source>Center</source>
+            <translation>居中</translation>
+        </message>
+        <message>
+            <source>Right</source>
+            <translation>右对齐</translation>
+        </message>
+        <message>
+            <source>Top</source>
+            <translation>顶部</translation>
+        </message>
+        <message>
+            <source>Bottom</source>
+            <translation>底部</translation>
+        </message>
+        <message>
+            <source>Bold</source>
+            <translation>粗体</translation>
+        </message>
+        <message>
+            <source>Italic</source>
+            <translation>斜体</translation>
+        </message>
+        <message>
+            <source>Show the complete image</source>
+            <translation>完整显示图片</translation>
+        </message>
+        <message>
+            <source>Fill the block · crop edges</source>
+            <translation>填满区块 · 裁切边缘</translation>
+        </message>
+        <message>
+            <source>Snap</source>
+            <translation>对齐步长</translation>
+        </message>
+        <message>
+            <source>Content layout</source>
+            <translation>内容排版</translation>
+        </message>
+        <message>
+            <source>Picture left</source>
+            <translation>左图右文</translation>
+        </message>
+        <message>
+            <source>Game notes</source>
+            <translation>游戏卡</translation>
+        </message>
+        <message>
+            <source>Use quick start</source>
+            <translation>使用快捷排版</translation>
+        </message>
+        <message>
+            <source>Save as preset…</source>
+            <translation>保存为预设…</translation>
+        </message>
+        <message>
+            <source>Apply preset to cards…</source>
+            <translation>批量套用预设…</translation>
+        </message>
+        <message>
+            <source>An unsaved block change belongs to an earlier draft of this card. It was kept separately and cannot replace your newer edits.</source>
+            <translation>有一份未保存的区块改动属于此卡的较早草稿，已单独保留，不会覆盖较新的编辑。</translation>
+        </message>
+        <message>
+            <source>Discard earlier change</source>
+            <translation>放弃较早的改动</translation>
+        </message>
+        <message>
+            <source>Discard change</source>
+            <translation>放弃改动</translation>
+        </message>
+        <message>
+            <source>Retry</source>
+            <translation>重试</translation>
+        </message>
+    </context>
+    <context>
         <name>CardDraftAssistant</name>
         <message>
             <source>Connect Deck's own Infer Runtime access in Settings, then try again.</source>
@@ -495,6 +737,30 @@
             <translation>此套已包含 64 张卡牌。</translation>
         </message>
         <message>
+            <source>The card changed. Reopen the block editor before changing its layout.</source>
+            <translation>卡片已变化，请重新打开区块编辑后再调整版式。</translation>
+        </message>
+        <message>
+            <source>Finish or discard the current block change before using presets.</source>
+            <translation>请先保存或放弃当前区块改动，再使用预设。</translation>
+        </message>
+        <message>
+            <source>Choose a flexible layout before saving or applying presets.</source>
+            <translation>请先选择灵活版式，再保存或套用预设。</translation>
+        </message>
+        <message>
+            <source>The card set changed. Reopen this window before applying a layout.</source>
+            <translation>卡片集已变化，请重新打开此窗口后套用版式。</translation>
+        </message>
+        <message>
+            <source>The cards changed after the batch. Your later edits were kept.</source>
+            <translation>批量套用后卡片已有新修改，已保留这些修改。</translation>
+        </message>
+        <message>
+            <source>The image was imported. Choose it from the project’s accepted images for the card back.</source>
+            <translation>图片已导入，请从项目中已采用的图片里选择它作为卡背。</translation>
+        </message>
+        <message>
             <source>Choose a flexible layout or start a new set before creating cards with AI. The saved cards keep their original layout until you choose.</source>
             <translation>使用 AI 创建卡片前，请选择灵活布局或新建卡组。在您选择之前，已保存的卡片会保留原始布局。</translation>
         </message>
@@ -509,6 +775,10 @@
         <message>
             <source>Selected image</source>
             <translation>已选图片</translation>
+        </message>
+        <message>
+            <source>Choose card back artwork</source>
+            <translation>选择卡背图片</translation>
         </message>
         <message>
             <source>Cards</source>
@@ -824,6 +1094,49 @@
         </message>
     </context>
     <context>
+        <name>CardLayoutBatchDialog</name>
+        <message>
+            <source>Apply layout to cards</source>
+            <translation>批量套用版式</translation>
+        </message>
+        <message>
+            <source>Choose a preset and the cards to change. Their content, quantities and image references stay the same.</source>
+            <translation>选择预设和要修改的卡片。卡片内容、张数和图片引用保持不变。</translation>
+        </message>
+        <message>
+            <source>Selected: %1 of %2 cards</source>
+            <translation>已选 %1 张，共 %2 张</translation>
+        </message>
+        <message>
+            <source>All cards</source>
+            <translation>全部卡片</translation>
+        </message>
+        <message>
+            <source>Layout: %1</source>
+            <translation>版式：%1</translation>
+        </message>
+        <message>
+            <source>Choose a layout preset to continue.</source>
+            <translation>请先选择一个版式预设。</translation>
+        </message>
+        <message>
+            <source>The card set changed. Reopen this window before applying a layout.</source>
+            <translation>卡片集已变化，请重新打开此窗口后套用版式。</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <source>Apply to card</source>
+            <translation>套用到此卡</translation>
+        </message>
+        <message>
+            <source>Apply to %1 cards</source>
+            <translation>套用到 %1 张卡</translation>
+        </message>
+    </context>
+    <context>
         <name>CardLayoutOptions</name>
         <message>
             <source>Choose text color</source>
@@ -832,6 +1145,22 @@
         <message>
             <source>Choose background color</source>
             <translation>选择背景颜色</translation>
+        </message>
+        <message>
+            <source>Save as preset…</source>
+            <translation>保存为预设…</translation>
+        </message>
+        <message>
+            <source>Apply preset to cards…</source>
+            <translation>批量套用预设…</translation>
+        </message>
+        <message>
+            <source>Undo last batch layout</source>
+            <translation>撤销上次批量套用</translation>
+        </message>
+        <message>
+            <source>Edit blocks…</source>
+            <translation>编辑区块…</translation>
         </message>
         <message>
             <source>This card’s layout</source>
@@ -862,6 +1191,10 @@
             <translation>游戏卡</translation>
         </message>
         <message>
+            <source>Blocks</source>
+            <translation>区块</translation>
+        </message>
+        <message>
             <source>Use the set’s layout type</source>
             <translation>版式类型跟随整套</translation>
         </message>
@@ -874,6 +1207,10 @@
             <translation>这些已保存卡牌保持原有外观。选择其他版式后，可使用通用卡牌设置。</translation>
         </message>
         <message>
+            <source>Edit blocks on an individual card.</source>
+            <translation>请在单张卡片中编辑区块。</translation>
+        </message>
+        <message>
             <source>Image placement</source>
             <translation>图片放置</translation>
         </message>
@@ -883,7 +1220,7 @@
         </message>
         <message>
             <source>Fill the card · crop edges</source>
-            <translation>铺满图片区域 · 裁切边缘</translation>
+            <translation>填满卡面 · 裁去边缘</translation>
         </message>
         <message>
             <source>Edges outside the image area will be cropped. Check the preview before printing.</source>
@@ -962,12 +1299,16 @@
             <translation>颜色、边框与留白</translation>
         </message>
         <message>
+            <source>Background &amp; border</source>
+            <translation>背景与边框</translation>
+        </message>
+        <message>
             <source>Background color</source>
             <translation>背景颜色</translation>
         </message>
         <message>
             <source>Use a color such as #ffffff.</source>
-            <translation>请使用类似 #ffffff 的颜色值。</translation>
+            <translation>请输入颜色值，例如 #ffffff。</translation>
         </message>
         <message>
             <source>Text color</source>
@@ -996,6 +1337,41 @@
         <message>
             <source>Reset this card’s layout options</source>
             <translation>重置此卡的版式选项</translation>
+        </message>
+    </context>
+    <context>
+        <name>CardLayoutPresetStore</name>
+        <message>
+            <source>Could not read the personal presets. The saved file was kept.</source>
+            <translation>无法读取个人预设，已保留原文件。</translation>
+        </message>
+        <message>
+            <source>Use a preset name of 1 to 80 characters without hidden control characters.</source>
+            <translation>预设名称需为 1 至 80 个字符，且不能包含隐藏控制字符。</translation>
+        </message>
+        <message>
+            <source>Could not save this layout. Choose a complete flexible card layout first.</source>
+            <translation>无法保存此版式，请先选择完整的灵活卡片版式。</translation>
+        </message>
+        <message>
+            <source>Could not save the preset. Keep the name and try again.</source>
+            <translation>无法保存预设，名称已保留，请重试。</translation>
+        </message>
+        <message>
+            <source>The personal presets are busy. Try saving again.</source>
+            <translation>个人预设正在使用中，请重试保存。</translation>
+        </message>
+        <message>
+            <source>That preset name already exists. Choose another name to keep it.</source>
+            <translation>此预设名称已存在，请换一个名称以保留原预设。</translation>
+        </message>
+        <message>
+            <source>That preset was removed. Save this layout with a new name.</source>
+            <translation>此预设已被删除，请用新名称保存版式。</translation>
+        </message>
+        <message>
+            <source>You can save up to 64 personal presets. Remove one before adding another.</source>
+            <translation>最多可保存 64 个个人预设，请先删除一个再添加。</translation>
         </message>
     </context>
     <context>
@@ -1049,8 +1425,55 @@
             <translation>游戏卡</translation>
         </message>
         <message>
+            <source>Delete preset?</source>
+            <translation>删除预设？</translation>
+        </message>
+        <message>
+            <source>Delete %1? Cards that already use this layout will stay unchanged.</source>
+            <translation>删除“%1”？已使用此版式的卡片保持不变。</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <source>Delete preset</source>
+            <translation>删除预设</translation>
+        </message>
+        <message>
             <source>Layout presets</source>
             <translation>卡面预设</translation>
+        </message>
+    </context>
+    <context>
+        <name>CardPresetSaveDialog</name>
+        <message>
+            <source>Save layout preset</source>
+            <translation>保存版式预设</translation>
+        </message>
+        <message>
+            <source>Save the resolved layout only. Card text, images and the card back are not included.</source>
+            <translation>仅保存当前生效的版式，不包含卡片文字、图片和卡背。</translation>
+        </message>
+        <message>
+            <source>Preset name</source>
+            <translation>预设名称</translation>
+        </message>
+        <message>
+            <source>Names are unique. Use a different name to keep an existing preset.</source>
+            <translation>预设名称不能重复，请使用不同名称以保留已有预设。</translation>
+        </message>
+        <message>
+            <source>The card set changed. Reopen this window for the current layout.</source>
+            <translation>卡片集已变化，请重新打开窗口以获取当前版式。</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <source>Save preset</source>
+            <translation>保存预设</translation>
         </message>
     </context>
     <context>
@@ -1070,6 +1493,18 @@
         <message>
             <source>Choose valid rows, columns and a card from this accepted version.</source>
             <translation>请选择有效的行列数，以及当前已采用版本中的卡片。</translation>
+        </message>
+        <message>
+            <source>Add a card back in Whole set settings, then accept this version before printing backs.</source>
+            <translation>请先在“整套设置”中添加卡背，并采用此版本，再导出背面。</translation>
+        </message>
+        <message>
+            <source>The card back is incomplete. Choose an accepted image or a solid color in Whole set settings, then accept this version.</source>
+            <translation>卡背尚未完成。请在“整套设置”中选择已采用的图片或纯色，再采用此版本。</translation>
+        </message>
+        <message>
+            <source>Keep each back offset between -10 and 10 mm, with the cards and cut lines on the paper. Reduce the offsets or use smaller cards.</source>
+            <translation>背面偏移需在 −10 至 10 毫米之间，卡面和裁切线须保持在纸张内。请减小偏移或卡片尺寸。</translation>
         </message>
         <message>
             <source>An image is too narrow or wide for edge cropping. Go back to cards and choose Show the complete image, or use artwork with more suitable proportions.</source>
@@ -1155,10 +1590,6 @@
             <translation>US Letter · 8.5 × 11 英寸</translation>
         </message>
         <message>
-            <source>The paper margin is the minimum blank space outside the cut lines.</source>
-            <translation>页边距是裁切线外侧保留的最小空白。</translation>
-        </message>
-        <message>
             <source>Cards on the sheet</source>
             <translation>打印内容</translation>
         </message>
@@ -1227,8 +1658,36 @@
             <translation>卡牌高度（毫米）</translation>
         </message>
         <message>
+            <source>Back alignment</source>
+            <translation>背面对齐</translation>
+        </message>
+        <message>
+            <source>Back horizontal offset (mm)</source>
+            <translation>背面水平偏移（毫米）</translation>
+        </message>
+        <message>
+            <source>Back vertical offset (mm)</source>
+            <translation>背面垂直偏移（毫米）</translation>
+        </message>
+        <message>
+            <source>Positive offsets move the back right or down on the preview.</source>
+            <translation>正数会将预览中的背面向右或向下移动。</translation>
+        </message>
+        <message>
             <source>Reset layout</source>
             <translation>重置拼版</translation>
+        </message>
+        <message>
+            <source>Sheet %1 · Back</source>
+            <translation>第 %1 张纸 · 背面</translation>
+        </message>
+        <message>
+            <source>Sheet %1 · Front</source>
+            <translation>第 %1 张纸 · 正面</translation>
+        </message>
+        <message>
+            <source>%1 cards / sheet · %2 copies · %3 sheets · %4 pages</source>
+            <translation>每张纸 %1 张卡 · 共 %2 张卡 · %3 张纸 · %4 页 PDF</translation>
         </message>
         <message>
             <source>Export the PDF, then print at 100% / Actual size.</source>
@@ -1259,10 +1718,6 @@
             <translation>拼版示意</translation>
         </message>
         <message>
-            <source>%1 cards / sheet · %2 copies · %3 pages</source>
-            <translation>每页 %1 张 · 共 %2 张 · %3 页</translation>
-        </message>
-        <message>
             <source>Fix the card content to preview and export.</source>
             <translation>请先修改卡片内容，再预览和导出。</translation>
         </message>
@@ -1281,6 +1736,42 @@
         <message>
             <source>Arrange &amp; export PDF</source>
             <translation>拼版并导出 PDF</translation>
+        </message>
+        <message>
+            <source>The paper margin is the minimum blank space outside the front cut lines.</source>
+            <translation>纸张边距是正面裁切线之外预留的最小空白。</translation>
+        </message>
+        <message>
+            <source>Print sides</source>
+            <translation>打印面</translation>
+        </message>
+        <message>
+            <source>Fronts only</source>
+            <translation>仅正面</translation>
+        </message>
+        <message>
+            <source>Fronts &amp; backs</source>
+            <translation>正反两面</translation>
+        </message>
+        <message>
+            <source>Backs only</source>
+            <translation>仅背面</translation>
+        </message>
+        <message>
+            <source>Flip edge</source>
+            <translation>翻转方向</translation>
+        </message>
+        <message>
+            <source>Long edge</source>
+            <translation>长边翻转</translation>
+        </message>
+        <message>
+            <source>Short edge</source>
+            <translation>短边翻转</translation>
+        </message>
+        <message>
+            <source>Use the same flip edge when printing both sides of the PDF.</source>
+            <translation>打印双面 PDF 时，请选择相同的翻转方向。</translation>
         </message>
         <message>
             <source>Cut line width (mm)</source>

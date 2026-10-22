@@ -1,5 +1,7 @@
 //! Small card-face presets, independent of rendering, physical printing and runtime types.
 use serde::{Deserialize, Serialize};
+mod blocks;
+pub use blocks::{CardBlock, CardBlockField, CardBlockVerticalAlign};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -9,6 +11,7 @@ pub enum CardLayoutMode {
     Text,
     ImageText,
     Classic,
+    Blocks,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,12 +79,26 @@ pub struct CardLayoutConfig {
     pub text_offset_x_percent: Option<i8>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text_offset_y_percent: Option<i8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocks: Option<Vec<CardBlock>>,
 }
 
 impl CardLayoutConfig {
     /// # Errors
     /// Rejects unbounded geometry, text scales and colors containing anything except RGB hex.
     pub fn validate(&self) -> Result<(), &'static str> {
+        if let Some(blocks) = &self.blocks {
+            if blocks.len() > 16 {
+                return Err("use at most 16 card blocks");
+            }
+            let mut ids = std::collections::BTreeSet::new();
+            for block in blocks {
+                block.validate()?;
+                if !ids.insert(&block.id) {
+                    return Err("card block ids must be unique");
+                }
+            }
+        }
         if self.padding_percent.is_some_and(|v| v > 20)
             || self
                 .image_share_percent
@@ -129,6 +146,7 @@ impl CardLayoutConfig {
             text_vertical_align: card.text_vertical_align.or(self.text_vertical_align),
             text_offset_x_percent: card.text_offset_x_percent.or(self.text_offset_x_percent),
             text_offset_y_percent: card.text_offset_y_percent.or(self.text_offset_y_percent),
+            blocks: card.blocks.clone().or_else(|| self.blocks.clone()),
         }
     }
 }
